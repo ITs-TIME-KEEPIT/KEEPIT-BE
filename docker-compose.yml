@@ -8,7 +8,7 @@ services:
     container_name: keepit-mysql
     restart: unless-stopped
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     environment:
       MYSQL_DATABASE: ${DB_NAME:-keepit}
       MYSQL_USER: ${DB_USERNAME:-keepit}
@@ -32,7 +32,7 @@ services:
     profiles: ["redis"]
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
 volumes:
   mysql-data:
