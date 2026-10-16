@@ -1,0 +1,59 @@
+spring:
+  application:
+    name: keepit
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate   # 스키마는 Flyway로만 관리
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+
+  # [P1] Redis - build.gradle 의존성 주석 해제 후 사용
+  # data:
+  #   redis:
+  #     host: ${REDIS_HOST:localhost}
+  #     port: ${REDIS_PORT:6379}
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-expiration: ${JWT_ACCESS_EXPIRATION:3600000}       # 1시간 (ms)
+  refresh-token-expiration: ${JWT_REFRESH_EXPIRATION:1209600000}  # 14일 (ms)
+
+kakao:
+  client-id: ${KAKAO_CLIENT_ID:}
+  client-secret: ${KAKAO_CLIENT_SECRET:}
+  redirect-uri: ${KAKAO_REDIRECT_URI:}
+
+# [AWS 보류] AWS 세팅은 추후 진행 - S3 사용 시 주석 해제
+# aws:
+#   region: ${AWS_REGION:ap-northeast-2}
+#   s3:
+#     bucket: ${AWS_S3_BUCKET:}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

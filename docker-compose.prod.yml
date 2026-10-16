@@ -1,0 +1,26 @@
+# 운영 서버용: Nginx + Spring Boot 앱
+#   [AWS 보류] 배포 서버(EC2)와 운영 DB(RDS)는 추후 결정
+#   배포 디렉터리에 이 파일, nginx/, .env 를 둔다.
+#   docker compose -f docker-compose.prod.yml up -d
+services:
+  app:
+    image: ${DOCKER_IMAGE}
+    container_name: keepit-app
+    restart: always
+    env_file:
+      - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    expose:
+      - "8080"
+
+  nginx:
+    image: nginx:1.28-alpine
+    container_name: keepit-nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
