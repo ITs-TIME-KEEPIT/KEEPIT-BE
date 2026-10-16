@@ -70,7 +70,7 @@ AWS 세팅(EC2 배포, RDS, S3)은 추후 진행합니다. 관련 코드는 `[AW
 - `build.gradle`: AWS SDK BOM / `software.amazon.awssdk:s3`
 - `application.yml`의 `aws:` 설정, `application-prod.yml`의 RDS datasource
 - `global/config/S3Config.java`, `global/s3/*`
-- `.github/workflows/cd.yml` (Docker Hub 푸시 → EC2 배포)
+- `docs/deploy/cd.yml` (Docker Hub 푸시 → EC2 배포 초안, 활성화 시 `.github/workflows/`로 이동)
 - `.env.example`의 `DB_URL`, `AWS_*`
 
 CD 활성화 시 필요한 GitHub Secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `EC2_HOST`, `EC2_USERNAME`, `EC2_SSH_KEY`, `EC2_DEPLOY_PATH`

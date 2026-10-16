@@ -1,4 +1,4 @@
-# [AWS 보류] EC2 배포 워크플로 - AWS 세팅 후 전체 주석 해제
+# [AWS 보류] EC2 배포 워크플로 초안 - AWS 세팅 후 .github/workflows/cd.yml 로 옮기고 전체 주석 해제
 
 # name: CD
 #

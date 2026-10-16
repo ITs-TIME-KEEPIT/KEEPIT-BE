@@ -19,7 +19,7 @@ Spring Boot 4.1.1 / Java 17 / Gradle 8.14.2 wrapper / MySQL 8.4 + JPA + Flyway /
 - Schema is owned by Flyway (`src/main/resources/db/migration`, `V{n}__desc.sql`); JPA runs with `ddl-auto: validate`. Never edit an already-applied migration.
 - `JwtAuthenticationFilter` is intentionally not a Spring bean — it is instantiated in `SecurityConfig` to avoid double registration as a servlet filter. Public endpoints are listed in `SecurityConfig.PUBLIC_URLS`.
 - Config is bound via `@ConfigurationProperties` records (`JwtProperties`, `KakaoProperties`) picked up by `@ConfigurationPropertiesScan`. Secrets come from env vars (see `.env.example`).
-- AWS (EC2 deploy, RDS, S3) is on hold: all related code is commented out and tagged `[AWS 보류]` (S3 classes, AWS SDK deps, `aws:`/RDS config, `cd.yml`). Don't re-enable it unless asked; search for `[AWS 보류]` to find every spot.
+- AWS (EC2 deploy, RDS, S3) is on hold: all related code is commented out and tagged `[AWS 보류]` (S3 classes, AWS SDK deps, `aws:`/RDS config, `docs/deploy/cd.yml` draft workflow). Don't re-enable it unless asked; search for `[AWS 보류]` to find every spot.
 
 ## Git / collaboration conventions
 
