@@ -2,8 +2,10 @@ package com.keepit.global.oauth.kakao;
 
 import com.keepit.global.oauth.kakao.dto.KakaoTokenResponse;
 import com.keepit.global.oauth.kakao.dto.KakaoUserInfoResponse;
+import java.time.Duration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -20,12 +22,18 @@ public class KakaoOAuthClient {
 
 	private static final String TOKEN_URI = "https://kauth.kakao.com/oauth/token";
 	private static final String USER_INFO_URI = "https://kapi.kakao.com/v2/user/me";
+	private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
+	private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
 
 	private final KakaoProperties kakaoProperties;
-	private final RestClient restClient = RestClient.create();
+	private final RestClient restClient;
 
 	public KakaoOAuthClient(KakaoProperties kakaoProperties) {
 		this.kakaoProperties = kakaoProperties;
+		SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+		requestFactory.setConnectTimeout(CONNECT_TIMEOUT);
+		requestFactory.setReadTimeout(READ_TIMEOUT);
+		this.restClient = RestClient.builder().requestFactory(requestFactory).build();
 	}
 
 	public KakaoTokenResponse getToken(String authorizationCode) {
