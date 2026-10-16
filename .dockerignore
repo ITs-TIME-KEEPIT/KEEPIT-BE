@@ -1,0 +1,12 @@
+.git
+.github
+.gradle
+.idea
+.vscode
+build
+out
+nginx
+*.md
+.env
+.env.*
+docker-compose*.yml

@@ -1,0 +1,38 @@
+# 로컬 개발용 인프라 (MySQL 8.4 [+ Redis])
+#   docker compose up -d                    # MySQL만 실행
+#   docker compose --profile redis up -d    # Redis 포함 실행
+# 애플리케이션은 IDE 또는 ./gradlew bootRun 으로 실행 (local 프로필)
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: keepit-mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-keepit}
+      MYSQL_USER: ${DB_USERNAME:-keepit}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-keepit}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: keepit-redis
+    profiles: ["redis"]
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+volumes:
+  mysql-data:
