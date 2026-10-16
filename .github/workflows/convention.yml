@@ -1,0 +1,47 @@
+name: Convention
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check branch name
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$BASE_REF" = "main" ] && [ "$HEAD_REF" = "develop" ]; then
+            exit 0
+          fi
+          if ! echo "$HEAD_REF" | grep -Eq '^(feature|fix|refactor|docs)/[0-9]+-.+$'; then
+            echo "::error::브랜치 이름이 컨벤션에 맞지 않습니다: $HEAD_REF (형식: feature|fix|refactor|docs/{이슈번호}-{요약})"
+            exit 1
+          fi
+
+      - name: Check commit messages
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          failed=0
+          while IFS= read -r msg; do
+            case "$msg" in Merge*|Revert*) continue ;; esac
+            if ! echo "$msg" | grep -Eq '^(feat|fix|refactor|test|docs|chore|style|build|ci): .+[^.]$'; then
+              echo "::error::커밋 메시지 형식 오류: $msg"
+              failed=1
+            fi
+          done <<< "$(git log --no-merges --format=%s "$BASE_SHA..$HEAD_SHA")"
+          if [ "$failed" -ne 0 ]; then
+            echo "형식: {type}: {작업 내용} (type: feat, fix, refactor, test, docs, chore, style, build, ci / 끝에 마침표 금지)"
+            exit 1
+          fi
