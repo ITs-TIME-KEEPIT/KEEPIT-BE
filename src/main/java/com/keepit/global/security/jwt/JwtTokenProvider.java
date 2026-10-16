@@ -19,13 +19,21 @@ import org.springframework.stereotype.Component;
 public class JwtTokenProvider {
 
 	private static final String ROLE_CLAIM = "role";
+	private static final String TYPE_CLAIM = "type";
+	private static final String ACCESS_TYPE = "access";
+	private static final String REFRESH_TYPE = "refresh";
+	private static final int MIN_SECRET_BYTES = 32;
 
 	private final SecretKey secretKey;
 	private final long accessTokenExpiration;
 	private final long refreshTokenExpiration;
 
 	public JwtTokenProvider(JwtProperties jwtProperties) {
-		this.secretKey = Keys.hmacShaKeyFor(jwtProperties.secret().getBytes(StandardCharsets.UTF_8));
+		String secret = jwtProperties.secret();
+		if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < MIN_SECRET_BYTES) {
+			throw new IllegalStateException("jwt.secret(JWT_SECRET)은 " + MIN_SECRET_BYTES + "바이트 이상이어야 합니다.");
+		}
+		this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
 		this.accessTokenExpiration = jwtProperties.accessTokenExpiration();
 		this.refreshTokenExpiration = jwtProperties.refreshTokenExpiration();
 	}
@@ -34,6 +42,7 @@ public class JwtTokenProvider {
 		Date now = new Date();
 		return Jwts.builder()
 				.subject(String.valueOf(memberId))
+				.claim(TYPE_CLAIM, ACCESS_TYPE)
 				.claim(ROLE_CLAIM, role)
 				.issuedAt(now)
 				.expiration(new Date(now.getTime() + accessTokenExpiration))
@@ -45,6 +54,7 @@ public class JwtTokenProvider {
 		Date now = new Date();
 		return Jwts.builder()
 				.subject(String.valueOf(memberId))
+				.claim(TYPE_CLAIM, REFRESH_TYPE)
 				.issuedAt(now)
 				.expiration(new Date(now.getTime() + refreshTokenExpiration))
 				.signWith(secretKey)
@@ -59,6 +69,14 @@ public class JwtTokenProvider {
 			log.debug("Invalid JWT: {}", e.getMessage());
 			return false;
 		}
+	}
+
+	public boolean isAccessToken(String token) {
+		return ACCESS_TYPE.equals(parseClaims(token).get(TYPE_CLAIM, String.class));
+	}
+
+	public boolean isRefreshToken(String token) {
+		return REFRESH_TYPE.equals(parseClaims(token).get(TYPE_CLAIM, String.class));
 	}
 
 	public Authentication getAuthentication(String token) {
