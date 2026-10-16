@@ -1,0 +1,93 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '4.1.1'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.keepit'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(17)
+	}
+}
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+ext {
+	springdocVersion = '3.1.1'
+	jjwtVersion = '0.13.0'
+	// awsSdkVersion = '2.56.0'  // [AWS 보류]
+}
+
+// [AWS 보류] AWS 세팅은 추후 진행 - S3 사용 시 주석 해제
+// dependencyManagement {
+// 	imports {
+// 		mavenBom "software.amazon.awssdk:bom:${awsSdkVersion}"
+// 	}
+// }
+
+dependencies {
+	// Spring Boot
+	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+	// Security + JWT
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation "io.jsonwebtoken:jjwt-api:${jjwtVersion}"
+	runtimeOnly "io.jsonwebtoken:jjwt-impl:${jjwtVersion}"
+	runtimeOnly "io.jsonwebtoken:jjwt-jackson:${jjwtVersion}"
+
+	// Database (MySQL 8.4 + JPA + Flyway)
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-flyway'
+	implementation 'org.flywaydb:flyway-mysql'
+	runtimeOnly 'com.mysql:mysql-connector-j'
+
+	// API Documentation
+	implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
+
+	// [AWS 보류] AWS S3 (SDK for Java v2) - 추후 주석 해제
+	// implementation 'software.amazon.awssdk:s3'
+
+	// [P1] Redis - 필요 시 주석 해제 (application.yml의 redis 설정도 함께 활성화)
+	// implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+	// [P1] FCM Push - 필요 시 주석 해제
+	// implementation 'com.google.firebase:firebase-admin:9.11.0'
+
+	// Lombok
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+	// Test
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+	testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+	testImplementation 'org.testcontainers:testcontainers-mysql'
+	testCompileOnly 'org.projectlombok:lombok'
+	testAnnotationProcessor 'org.projectlombok:lombok'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
+
+// 배포용으로는 실행 가능한 bootJar만 생성
+tasks.named('jar') {
+	enabled = false
+}
