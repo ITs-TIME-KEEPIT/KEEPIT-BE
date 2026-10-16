@@ -1,0 +1,15 @@
+# [AWS 보류] RDS 연결은 추후 결정 - 운영 DB 정해지면 주석 해제
+# spring:
+#   datasource:
+#     url: ${DB_URL}           # 예: jdbc:mysql://<rds-endpoint>:3306/keepit?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+#     username: ${DB_USERNAME}
+#     password: ${DB_PASSWORD}
+#     hikari:
+#       maximum-pool-size: 10
+
+server:
+  forward-headers-strategy: native   # Nginx X-Forwarded-* 헤더 신뢰
+
+logging:
+  level:
+    root: info
