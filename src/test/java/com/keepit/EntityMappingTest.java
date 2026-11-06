@@ -203,6 +203,16 @@ class EntityMappingTest {
 	}
 
 	@Test
+	@DisplayName("같은 시도와 시군구로 지역을 중복 저장할 수 없다")
+	void duplicateRegion() {
+		em.flush();
+
+		assertThatThrownBy(() -> em.persistAndFlush(
+				Region.builder().sido("서울").sigungu("마포구").open(false).build()))
+				.isInstanceOf(PersistenceException.class);
+	}
+
+	@Test
 	@DisplayName("refresh token은 사용자당 1개만 저장할 수 있다")
 	void duplicateRefreshTokenPerUser() {
 		em.persistAndFlush(RefreshToken.builder().user(owner).tokenHash("a".repeat(64)).expiresAt(NOW).build());
