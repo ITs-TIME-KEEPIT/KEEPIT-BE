@@ -9,6 +9,7 @@ import com.keepit.rental.exception.RentalException;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 
@@ -48,16 +49,42 @@ public class RentalSchedulePolicy {
 		if (period.days() > MAX_RENTAL_DAYS) {
 			throw new RentalException(RentalErrorCode.RENTAL_PERIOD_TOO_LONG);
 		}
-		RentalPeriod occupied = occupiedPeriod(period, tradeMethod);
-		if (unavailablePeriods.stream().anyMatch(occupied::overlaps)) {
+		if (isOwnerBlocked(period, tradeMethod, unavailablePeriods)) {
 			throw new RentalException(RentalErrorCode.RENTAL_PERIOD_UNAVAILABLE);
 		}
-		boolean reserved = reservations.stream()
-				.filter(rental -> RESERVED_STATUSES.contains(rental.getStatus()))
-				.anyMatch(rental -> conflicts(period, tradeMethod, rental.getPeriod(), rental.getTradeMethod()));
-		if (reserved) {
+		if (isReserved(period, tradeMethod, reservations)) {
 			throw new RentalException(RentalErrorCode.RENTAL_PERIOD_ALREADY_RESERVED);
 		}
+	}
+
+	/**
+	 * 하루를 대여 기간에 넣을 수 없는 이유. 넣을 수 있으면 empty.
+	 * 기간이 막히는지는 기간 안의 날짜 중 하루라도 막히는지와 같아서, 달력은 날짜별로 판단하면 된다.
+	 */
+	public Optional<UnavailableReason> unavailableReason(LocalDate day, TradeMethod tradeMethod,
+			Collection<RentalPeriod> unavailablePeriods, Collection<Rental> reservations) {
+		RentalPeriod oneDay = new RentalPeriod(day, day);
+		if (isOwnerBlocked(oneDay, tradeMethod, unavailablePeriods)) {
+			return Optional.of(UnavailableReason.OWNER_BLOCKED);
+		}
+		if (isReserved(oneDay, tradeMethod, reservations)) {
+			return Optional.of(UnavailableReason.RESERVED);
+		}
+		return Optional.empty();
+	}
+
+	/** 옷 주인이 막아 둔 기간과 겹치는지. 택배면 배송 기간까지 본다. */
+	public boolean isOwnerBlocked(RentalPeriod period, TradeMethod tradeMethod,
+			Collection<RentalPeriod> unavailablePeriods) {
+		RentalPeriod occupied = occupiedPeriod(period, tradeMethod);
+		return unavailablePeriods.stream().anyMatch(occupied::overlaps);
+	}
+
+	/** 이미 수락된 예약과 함께 잡힐 수 없는지. 예약 상태가 아닌 대여 건은 무시한다. */
+	public boolean isReserved(RentalPeriod period, TradeMethod tradeMethod, Collection<Rental> reservations) {
+		return reservations.stream()
+				.filter(rental -> RESERVED_STATUSES.contains(rental.getStatus()))
+				.anyMatch(rental -> conflicts(period, tradeMethod, rental.getPeriod(), rental.getTradeMethod()));
 	}
 
 	/**
