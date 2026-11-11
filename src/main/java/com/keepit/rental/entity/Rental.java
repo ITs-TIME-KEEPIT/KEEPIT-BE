@@ -1,9 +1,12 @@
 package com.keepit.rental.entity;
 
 import com.keepit.clothing.entity.Clothing;
+import com.keepit.clothing.entity.ClothingStatus;
 import com.keepit.clothing.entity.LaundryBy;
 import com.keepit.clothing.entity.LaundryMethod;
 import com.keepit.global.entity.BaseTimeEntity;
+import com.keepit.rental.exception.RentalErrorCode;
+import com.keepit.rental.exception.RentalException;
 import com.keepit.user.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -16,8 +19,10 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -35,6 +40,9 @@ import org.hibernate.type.SqlTypes;
 @Table(name = "rentals")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Rental extends BaseTimeEntity {
+
+	/** 신청 후 옷 주인이 응답해야 하는 기한 (RENT-440). */
+	public static final Duration RESPONSE_DEADLINE = Duration.ofHours(48);
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -146,6 +154,121 @@ public class Rental extends BaseTimeEntity {
 		this.requestedAt = requestedAt;
 		this.expiresAt = expiresAt;
 		this.status = RentalStatus.REQUESTED;
+	}
+
+	/**
+	 * 대여 신청을 만든다. 신청 시점의 대여료·택배비·세탁 조건을 applied_* 로 복사해 두어,
+	 * 이후 옷 주인이 조건을 바꿔도 이 신청에는 영향이 없게 한다.
+	 */
+	public static Rental request(Clothing clothing, User borrower, RentalPeriod period,
+			TradeMethod tradeMethod, LocalDateTime now) {
+		if (clothing.getStatus() != ClothingStatus.AVAILABLE || clothing.getDeletedAt() != null) {
+			throw new RentalException(RentalErrorCode.CLOTHING_NOT_RENTABLE);
+		}
+		if (Objects.equals(clothing.getOwner().getId(), borrower.getId())) {
+			throw new RentalException(RentalErrorCode.CANNOT_RENT_OWN_CLOTHING);
+		}
+		if (tradeMethod == TradeMethod.DELIVERY && !clothing.isDeliveryAvailable()) {
+			throw new RentalException(RentalErrorCode.DELIVERY_NOT_AVAILABLE);
+		}
+		return Rental.builder()
+				.clothing(clothing)
+				.owner(clothing.getOwner())
+				.borrower(borrower)
+				.startDate(period.startDate())
+				.endDate(period.endDate())
+				.tradeMethod(tradeMethod)
+				.appliedRentalFee(clothing.getRentalFee())
+				.appliedDeliveryFee(tradeMethod == TradeMethod.DELIVERY ? clothing.getDeliveryFee() : null)
+				.appliedLaundryBy(clothing.getLaundryBy())
+				.appliedLaundryMethod(clothing.getLaundryMethod())
+				.rulesAgreedAt(now)
+				.requestedAt(now)
+				.expiresAt(now.plus(RESPONSE_DEADLINE))
+				.build();
+	}
+
+	public RentalPeriod getPeriod() {
+		return new RentalPeriod(startDate, endDate);
+	}
+
+	public boolean isOwnedBy(Long userId) {
+		return Objects.equals(owner.getId(), userId);
+	}
+
+	public boolean isBorrowedBy(Long userId) {
+		return Objects.equals(borrower.getId(), userId);
+	}
+
+	public boolean isExpiredAt(LocalDateTime now) {
+		return now.isAfter(expiresAt);
+	}
+
+	/** 신청이 처음 만들어졌을 때의 이력. */
+	public RentalStatusLog createdLog() {
+		return RentalStatusLog.builder()
+				.rental(this)
+				.fromStatus(null)
+				.toStatus(RentalStatus.REQUESTED)
+				.actorType(ActorType.BORROWER)
+				.actor(borrower)
+				.build();
+	}
+
+	/** 옷 주인이 수락한다. 48시간이 지난 신청은 자동 만료 배치가 없어도 수락할 수 없다. */
+	public RentalStatusLog accept(LocalDateTime now) {
+		requireStatus(RentalStatus.REQUESTED);
+		if (isExpiredAt(now)) {
+			throw new RentalException(RentalErrorCode.RENTAL_REQUEST_EXPIRED);
+		}
+		this.acceptedAt = now;
+		return changeStatus(RentalStatus.ACCEPTED, ActorType.OWNER, owner, null);
+	}
+
+	/** 옷 주인이 사유를 골라 거절한다. 기타(ETC)면 직접 입력이 필요하다. */
+	public RentalStatusLog reject(RejectReason reason, String detail) {
+		requireStatus(RentalStatus.REQUESTED);
+		if (reason == null) {
+			throw new RentalException(RentalErrorCode.REJECT_REASON_REQUIRED);
+		}
+		if (reason == RejectReason.ETC && (detail == null || detail.isBlank())) {
+			throw new RentalException(RentalErrorCode.REJECT_REASON_DETAIL_REQUIRED);
+		}
+		this.rejectReason = reason;
+		this.rejectReasonDetail = reason == RejectReason.ETC ? detail.strip() : null;
+		return changeStatus(RentalStatus.REJECTED, ActorType.OWNER, owner, null);
+	}
+
+	/** 수락 전 대여자가 신청을 취소한다. 사유는 받지 않는다. (수락 후 취소는 UT 이후) */
+	public RentalStatusLog cancelByBorrower() {
+		requireStatus(RentalStatus.REQUESTED);
+		this.canceledBy = ActorType.BORROWER;
+		return changeStatus(RentalStatus.CANCELED, ActorType.BORROWER, borrower, null);
+	}
+
+	/** 기간이 겹치는 다른 신청이 수락되어 이 신청이 무효가 된다. */
+	public RentalStatusLog invalidate() {
+		requireStatus(RentalStatus.REQUESTED);
+		return changeStatus(RentalStatus.INVALIDATED, ActorType.SYSTEM, null, "기간이 겹치는 다른 신청이 수락됨");
+	}
+
+	private void requireStatus(RentalStatus expected) {
+		if (status != expected) {
+			throw new RentalException(RentalErrorCode.INVALID_RENTAL_STATUS);
+		}
+	}
+
+	private RentalStatusLog changeStatus(RentalStatus to, ActorType actorType, User actor, String reason) {
+		RentalStatus from = this.status;
+		this.status = to;
+		return RentalStatusLog.builder()
+				.rental(this)
+				.fromStatus(from)
+				.toStatus(to)
+				.actorType(actorType)
+				.actor(actor)
+				.reason(reason)
+				.build();
 	}
 
 }
