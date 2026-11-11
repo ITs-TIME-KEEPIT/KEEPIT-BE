@@ -24,7 +24,7 @@ class RentalPeriodTest {
 	void 돌려주는_날이_받는_날보다_앞서면_만들_수_없다() {
 		assertThatThrownBy(() -> period(21, 20))
 				.isInstanceOf(RentalException.class)
-				.extracting("errorCode").isEqualTo(RentalErrorCode.INVALID_RENTAL_PERIOD);
+				.extracting("responseCode").isEqualTo(RentalErrorCode.INVALID_RENTAL_PERIOD);
 	}
 
 	@Test

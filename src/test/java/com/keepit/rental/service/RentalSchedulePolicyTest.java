@@ -44,7 +44,7 @@ class RentalSchedulePolicyTest {
 	private void assertRejected(RentalPeriod period, TradeMethod method, List<RentalPeriod> unavailable,
 			List<Rental> reservations, RentalErrorCode expected) {
 		assertThatThrownBy(() -> policy.validateRequest(period, method, TODAY, unavailable, reservations))
-				.extracting("errorCode").isEqualTo(expected);
+				.extracting("responseCode").isEqualTo(expected);
 	}
 
 	private void assertAllowed(RentalPeriod period, TradeMethod method, List<RentalPeriod> unavailable,

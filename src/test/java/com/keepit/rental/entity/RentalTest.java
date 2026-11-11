@@ -56,7 +56,7 @@ class RentalTest {
 	}
 
 	private static void assertError(Runnable action, RentalErrorCode expected) {
-		assertThatThrownBy(action::run).extracting("errorCode").isEqualTo(expected);
+		assertThatThrownBy(action::run).extracting("responseCode").isEqualTo(expected);
 	}
 
 	@Nested
