@@ -1,5 +1,6 @@
 package com.keepit.global.config;
 
+import com.keepit.global.security.jwt.JwtAccessDeniedHandler;
 import com.keepit.global.security.jwt.JwtAuthenticationEntryPoint;
 import com.keepit.global.security.jwt.JwtAuthenticationFilter;
 import com.keepit.global.security.jwt.JwtTokenProvider;
@@ -24,10 +25,13 @@ public class SecurityConfig {
 
 	private final JwtTokenProvider jwtTokenProvider;
 	private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+	private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
 
-	public SecurityConfig(JwtTokenProvider jwtTokenProvider, JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint) {
+	public SecurityConfig(JwtTokenProvider jwtTokenProvider, JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint,
+			JwtAccessDeniedHandler jwtAccessDeniedHandler) {
 		this.jwtTokenProvider = jwtTokenProvider;
 		this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
+		this.jwtAccessDeniedHandler = jwtAccessDeniedHandler;
 	}
 
 	@Bean
@@ -40,7 +44,9 @@ public class SecurityConfig {
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers(PUBLIC_URLS).permitAll()
 						.anyRequest().authenticated())
-				.exceptionHandling(e -> e.authenticationEntryPoint(jwtAuthenticationEntryPoint))
+				.exceptionHandling(e -> e
+						.authenticationEntryPoint(jwtAuthenticationEntryPoint)
+						.accessDeniedHandler(jwtAccessDeniedHandler))
 				.addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class)
 				.build();
 	}
