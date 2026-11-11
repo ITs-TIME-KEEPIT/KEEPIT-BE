@@ -12,7 +12,9 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -30,11 +32,15 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(BindException.class)
 	public ResponseEntity<ErrorResponse<Void>> handleBindException(BindException exception) {
 		log.warn("Validation failed: {}", exception.getMessage());
+		ErrorResponseCode responseCode = exception instanceof MethodArgumentNotValidException validationException
+				&& validationException.getParameter().hasParameterAnnotation(RequestBody.class)
+				? ErrorResponseCode.INVALID_HTTP_MESSAGE_BODY
+				: ErrorResponseCode.INVALID_HTTP_MESSAGE_PARAMETER;
 		FieldError fieldError = exception.getBindingResult().getFieldError();
 		if (fieldError == null || fieldError.getDefaultMessage() == null) {
-			return response(ErrorResponse.from(ErrorResponseCode.INVALID_HTTP_MESSAGE_BODY));
+			return response(ErrorResponse.from(responseCode));
 		}
-		return response(ErrorResponse.of(ErrorResponseCode.INVALID_HTTP_MESSAGE_BODY, fieldError.getDefaultMessage()));
+		return response(ErrorResponse.of(responseCode, fieldError.getDefaultMessage()));
 	}
 
 	@ExceptionHandler(HttpMessageNotReadableException.class)
@@ -62,7 +68,8 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)
 	public ResponseEntity<ErrorResponse<Void>> handleMethodNotSupportedException(
 			HttpRequestMethodNotSupportedException exception) {
-		return response(ErrorResponse.from(ErrorResponseCode.UNSUPPORTED_HTTP_METHOD));
+		ErrorResponse<Void> body = ErrorResponse.from(ErrorResponseCode.UNSUPPORTED_HTTP_METHOD);
+		return ResponseEntity.status(body.getHttpStatus()).headers(exception.getHeaders()).body(body);
 	}
 
 	@ExceptionHandler(HttpMediaTypeNotSupportedException.class)

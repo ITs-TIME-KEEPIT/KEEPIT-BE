@@ -1,8 +1,10 @@
 package com.keepit.global.exception;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.keepit.global.response.SuccessResponse;
@@ -14,10 +16,12 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -63,6 +67,14 @@ class GlobalExceptionHandlerTest {
 	}
 
 	@Test
+	void 모델_속성_검증_실패는_파라미터_오류로_응답한다() throws Exception {
+		mockMvc.perform(get("/test/model").param("name", ""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("GLOBAL_400_3"))
+				.andExpect(jsonPath("$.message").value("이름을 입력해 주세요."));
+	}
+
+	@Test
 	void 읽을_수_없는_요청_바디는_400_응답한다() throws Exception {
 		mockMvc.perform(post("/test/body")
 						.contentType(MediaType.APPLICATION_JSON)
@@ -103,6 +115,7 @@ class GlobalExceptionHandlerTest {
 	void 지원하지_않는_메소드는_405_응답한다() throws Exception {
 		mockMvc.perform(post("/test/ok"))
 				.andExpect(status().isMethodNotAllowed())
+				.andExpect(header().string(HttpHeaders.ALLOW, containsString("GET")))
 				.andExpect(jsonPath("$.code").value("GLOBAL_405"));
 	}
 
@@ -143,6 +156,11 @@ class GlobalExceptionHandlerTest {
 
 		@GetMapping("/test/param")
 		SuccessResponse<Void> param(@RequestParam @Min(0) int page) {
+			return SuccessResponse.ok();
+		}
+
+		@GetMapping("/test/model")
+		SuccessResponse<Void> model(@Valid @ModelAttribute TestRequest request) {
 			return SuccessResponse.ok();
 		}
 
