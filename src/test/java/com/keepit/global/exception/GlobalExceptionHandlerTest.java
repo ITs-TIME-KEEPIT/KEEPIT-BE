@@ -2,6 +2,7 @@ package com.keepit.global.exception;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -12,12 +13,14 @@ import com.keepit.global.response.code.BaseResponseCode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import java.nio.charset.StandardCharsets;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +29,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 
 class GlobalExceptionHandlerTest {
@@ -64,6 +68,25 @@ class GlobalExceptionHandlerTest {
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("GLOBAL_400_2"))
 				.andExpect(jsonPath("$.message").value("이름을 입력해 주세요."));
+	}
+
+	@Test
+	void 요청_파트_검증_실패는_바디_오류로_응답한다() throws Exception {
+		MockMultipartFile part = new MockMultipartFile("request", "request.json",
+				MediaType.APPLICATION_JSON_VALUE, "{\"name\":\"\"}".getBytes(StandardCharsets.UTF_8));
+		mockMvc.perform(multipart("/test/part").file(part))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("GLOBAL_400_2"))
+				.andExpect(jsonPath("$.message").value("이름을 입력해 주세요."));
+	}
+
+	@Test
+	void 요청_파트_JSON_파싱_실패는_바디_오류로_응답한다() throws Exception {
+		MockMultipartFile part = new MockMultipartFile("request", "request.json",
+				MediaType.APPLICATION_JSON_VALUE, "{invalid".getBytes(StandardCharsets.UTF_8));
+		mockMvc.perform(multipart("/test/part").file(part))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("GLOBAL_400_2"));
 	}
 
 	@Test
@@ -156,6 +179,11 @@ class GlobalExceptionHandlerTest {
 
 		@GetMapping("/test/param")
 		SuccessResponse<Void> param(@RequestParam @Min(0) int page) {
+			return SuccessResponse.ok();
+		}
+
+		@PostMapping(value = "/test/part", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+		SuccessResponse<Void> part(@Valid @RequestPart("request") TestRequest request) {
 			return SuccessResponse.ok();
 		}
 

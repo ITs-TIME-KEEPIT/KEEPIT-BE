@@ -15,6 +15,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -33,7 +34,8 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ErrorResponse<Void>> handleBindException(BindException exception) {
 		log.warn("Validation failed: {}", exception.getMessage());
 		ErrorResponseCode responseCode = exception instanceof MethodArgumentNotValidException validationException
-				&& validationException.getParameter().hasParameterAnnotation(RequestBody.class)
+				&& (validationException.getParameter().hasParameterAnnotation(RequestBody.class)
+						|| validationException.getParameter().hasParameterAnnotation(RequestPart.class))
 				? ErrorResponseCode.INVALID_HTTP_MESSAGE_BODY
 				: ErrorResponseCode.INVALID_HTTP_MESSAGE_PARAMETER;
 		FieldError fieldError = exception.getBindingResult().getFieldError();
