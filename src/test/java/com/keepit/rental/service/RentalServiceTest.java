@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -38,6 +39,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -85,6 +87,7 @@ class RentalServiceTest {
 		when(supportRepository.findClothingForUpdate(CLOTHING_ID)).thenReturn(Optional.of(clothing));
 		when(supportRepository.findUnavailablePeriods(CLOTHING_ID)).thenReturn(List.of());
 		when(rentalRepository.findAllByClothingIdAndStatusIn(eq(CLOTHING_ID), anyCollection())).thenReturn(List.of());
+		when(rentalRepository.findClothingIdById(any())).thenReturn(Optional.of(CLOTHING_ID));
 	}
 
 	private static User user(Long id) {
@@ -227,7 +230,22 @@ class RentalServiceTest {
 			when(rentalRepository.findById(1L)).thenReturn(Optional.of(target));
 
 			assertError(() -> rentalService.accept(3L, 1L), RentalErrorCode.RENTAL_ACCESS_DENIED);
-			verify(supportRepository, never()).findClothingForUpdate(any());
+			assertThat(target.getStatus()).isEqualTo(RentalStatus.REQUESTED);
+			verify(statusLogRepository, never()).saveAll(anyIterable());
+		}
+
+		@Test
+		void 신청을_읽기_전에_옷_행부터_잠근다() {
+			Rental target = requested(1L, borrower, period(20, 22), TradeMethod.DIRECT);
+			when(rentalRepository.findById(1L)).thenReturn(Optional.of(target));
+
+			rentalService.accept(1L, 1L);
+
+			// 잠금 전에 신청을 읽어 두면 다른 트랜잭션이 바꾼 상태를 못 보고 덮어쓸 수 있다
+			InOrder order = inOrder(rentalRepository, supportRepository);
+			order.verify(rentalRepository).findClothingIdById(1L);
+			order.verify(supportRepository).findClothingForUpdate(CLOTHING_ID);
+			order.verify(rentalRepository).findById(1L);
 		}
 
 		@Test
@@ -242,7 +260,7 @@ class RentalServiceTest {
 
 		@Test
 		void 없는_신청이면_404() {
-			when(rentalRepository.findById(5L)).thenReturn(Optional.empty());
+			when(rentalRepository.findClothingIdById(5L)).thenReturn(Optional.empty());
 
 			assertError(() -> rentalService.accept(1L, 5L), RentalErrorCode.RENTAL_NOT_FOUND);
 		}

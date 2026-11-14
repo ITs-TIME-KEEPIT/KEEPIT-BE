@@ -27,6 +27,7 @@ import java.util.EnumSet;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -106,19 +107,17 @@ public class RentalService {
 
 	/**
 	 * 옷 주인이 수락한다.
-	 * 1) 옷 행을 잠가 같은 옷의 수락을 한 번에 하나씩만 처리한다.
+	 * 1) 옷 행을 잠그고 신청을 최신 상태로 읽는다({@link #lockClothingAndGetRental}).
 	 * 2) 잠근 뒤 수락된 예약과 겹치는지 다시 본다(신청 때 비어 있던 날이 그사이 찼을 수 있다).
 	 * 3) 이 예약과 함께 잡힐 수 없는 다른 신청은 무효(INVALIDATED)로 만든다.
 	 */
-	@Transactional
+	@Transactional(isolation = Isolation.READ_COMMITTED)
 	public RentalAcceptResult accept(Long ownerId, Long rentalId) {
-		Rental rental = getRental(rentalId);
+		Rental rental = lockClothingAndGetRental(rentalId);
 		if (!rental.isOwnedBy(ownerId)) {
 			throw new RentalException(RentalErrorCode.RENTAL_ACCESS_DENIED);
 		}
 		Long clothingId = rental.getClothing().getId();
-		supportRepository.findClothingForUpdate(clothingId)
-				.orElseThrow(() -> new RentalException(RentalErrorCode.CLOTHING_NOT_FOUND));
 
 		if (schedulePolicy.isReserved(rental.getPeriod(), rental.getTradeMethod(), findReservations(clothingId))) {
 			throw new RentalException(RentalErrorCode.RENTAL_PERIOD_ALREADY_RESERVED);
@@ -143,20 +142,20 @@ public class RentalService {
 		return new RentalAcceptResult(rental.getId(), invalidatedIds);
 	}
 
-	/** 옷 주인이 사유를 골라 거절한다. */
-	@Transactional
+	/** 옷 주인이 사유를 골라 거절한다. 같은 옷의 수락과 겹치지 않게 수락과 같은 순서로 잠근다. */
+	@Transactional(isolation = Isolation.READ_COMMITTED)
 	public void reject(Long ownerId, Long rentalId, RejectReason reason, String reasonDetail) {
-		Rental rental = getRental(rentalId);
+		Rental rental = lockClothingAndGetRental(rentalId);
 		if (!rental.isOwnedBy(ownerId)) {
 			throw new RentalException(RentalErrorCode.RENTAL_ACCESS_DENIED);
 		}
 		statusLogRepository.save(rental.reject(reason, reasonDetail));
 	}
 
-	/** 수락 전 신청자가 취소한다. */
-	@Transactional
+	/** 수락 전 신청자가 취소한다. 주인의 수락과 동시에 들어와도 한쪽만 반영되게 같은 순서로 잠근다. */
+	@Transactional(isolation = Isolation.READ_COMMITTED)
 	public void cancel(Long borrowerId, Long rentalId) {
-		Rental rental = getRental(rentalId);
+		Rental rental = lockClothingAndGetRental(rentalId);
 		if (!rental.isBorrowedBy(borrowerId)) {
 			throw new RentalException(RentalErrorCode.RENTAL_ACCESS_DENIED);
 		}
@@ -173,6 +172,22 @@ public class RentalService {
 		schedulePolicy.validateRequest(period, tradeMethod, LocalDate.now(clock),
 				supportRepository.findUnavailablePeriods(clothingId), findReservations(clothingId));
 		return rental;
+	}
+
+	/**
+	 * 신청의 상태를 바꾸기 전에 부른다. 순서가 중요하다.
+	 * 1) 옷 id만 조회한다(신청 엔티티는 아직 읽지 않는다).
+	 * 2) 옷 행을 SELECT ... FOR UPDATE로 잠근다. 같은 옷의 다른 수락·거절·취소는 여기서 기다린다.
+	 * 3) 잠금을 얻은 뒤에 신청을 읽는다. READ COMMITTED라 앞 트랜잭션이 커밋한 최신 상태가 보인다.
+	 * 잠금 전에 신청을 읽어 두면(또는 REPEATABLE READ의 스냅샷을 보면) 이미 무효가 된 신청을
+	 * 수락으로 덮어쓰는 문제가 생긴다 — RentalAcceptConcurrencyTest가 이 경우를 확인한다.
+	 */
+	private Rental lockClothingAndGetRental(Long rentalId) {
+		Long clothingId = rentalRepository.findClothingIdById(rentalId)
+				.orElseThrow(() -> new RentalException(RentalErrorCode.RENTAL_NOT_FOUND));
+		supportRepository.findClothingForUpdate(clothingId)
+				.orElseThrow(() -> new RentalException(RentalErrorCode.CLOTHING_NOT_FOUND));
+		return getRental(rentalId);
 	}
 
 	private List<Rental> findReservations(Long clothingId) {
