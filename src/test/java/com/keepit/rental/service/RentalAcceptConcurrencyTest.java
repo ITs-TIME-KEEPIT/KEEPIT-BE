@@ -95,28 +95,34 @@ class RentalAcceptConcurrencyTest {
 		CountDownLatch start = new CountDownLatch(1);
 		ExecutorService executor = Executors.newFixedThreadPool(2);
 		List<Future<Boolean>> results = new ArrayList<>();
-		for (Long rentalId : List.of(rentalA, rentalB)) {
-			Callable<Boolean> accept = () -> {
-				ready.countDown();
-				start.await();
-				try {
-					rentalService.accept(ownerId, rentalId);
-					return true;
-				} catch (RuntimeException e) {
-					return false;   // 나중에 들어온 쪽은 상태 오류나 예약 겹침으로 거절된다
-				}
-			};
-			results.add(executor.submit(accept));
-		}
-		ready.await();
-		start.countDown();   // 두 스레드를 동시에 출발시킨다
 		int succeeded = 0;
-		for (Future<Boolean> result : results) {
-			if (result.get(30, TimeUnit.SECONDS)) {
-				succeeded++;
+		// 성공하든 시간 초과로 실패하든 스레드를 반드시 정리해서, 남은 작업이 cleanUp의 삭제와 엉키지 않게 한다
+		try {
+			for (Long rentalId : List.of(rentalA, rentalB)) {
+				Callable<Boolean> accept = () -> {
+					ready.countDown();
+					start.await();
+					try {
+						rentalService.accept(ownerId, rentalId);
+						return true;
+					} catch (RuntimeException e) {
+						return false;   // 나중에 들어온 쪽은 상태 오류나 예약 겹침으로 거절된다
+					}
+				};
+				results.add(executor.submit(accept));
 			}
+			ready.await();
+			start.countDown();   // 두 스레드를 동시에 출발시킨다
+			for (Future<Boolean> result : results) {
+				if (result.get(30, TimeUnit.SECONDS)) {
+					succeeded++;
+				}
+			}
+		} finally {
+			results.forEach(result -> result.cancel(true));
+			executor.shutdownNow();
+			executor.awaitTermination(10, TimeUnit.SECONDS);
 		}
-		executor.shutdown();
 
 		assertThat(succeeded).isEqualTo(1);
 		List<RentalStatus> statuses = List.of(
