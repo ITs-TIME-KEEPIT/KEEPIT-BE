@@ -139,6 +139,26 @@ class RentalTest {
 		}
 
 		@Test
+		void 받는_날이_오늘인_신청은_당일에_수락할_수_있다() {
+			RentalPeriod today = new RentalPeriod(NOW.toLocalDate(), NOW.toLocalDate().plusDays(2));
+			Rental rental = Rental.request(clothing, borrower, today, TradeMethod.DIRECT, NOW);
+
+			rental.accept(NOW.plusHours(10));
+
+			assertThat(rental.getStatus()).isEqualTo(RentalStatus.ACCEPTED);
+		}
+
+		@Test
+		void 받는_날이_지난_신청은_48시간_안이어도_수락할_수_없다() {
+			// 오늘 받는 신청을 주인이 다음 날 확인한 경우
+			RentalPeriod today = new RentalPeriod(NOW.toLocalDate(), NOW.toLocalDate().plusDays(2));
+			Rental rental = Rental.request(clothing, borrower, today, TradeMethod.DIRECT, NOW);
+
+			assertError(() -> rental.accept(NOW.plusDays(1)), RentalErrorCode.RENTAL_START_DATE_PASSED);
+			assertThat(rental.getStatus()).isEqualTo(RentalStatus.REQUESTED);
+		}
+
+		@Test
 		void 정확히_48시간까지는_수락할_수_있다() {
 			Rental rental = requested();
 

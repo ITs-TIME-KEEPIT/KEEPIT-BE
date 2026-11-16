@@ -32,7 +32,8 @@ public enum RentalErrorCode implements BaseResponseCode {
 	RENTAL_PERIOD_ALREADY_RESERVED("RENTAL_409_2", HttpStatus.CONFLICT, "이미 예약된 기간과 겹칩니다."),
 	CLOTHING_NOT_RENTABLE("RENTAL_409_3", HttpStatus.CONFLICT, "지금은 대여할 수 없는 옷입니다."),
 	INVALID_RENTAL_STATUS("RENTAL_409_4", HttpStatus.CONFLICT, "현재 상태에서는 할 수 없는 요청입니다."),
-	RENTAL_REQUEST_EXPIRED("RENTAL_409_5", HttpStatus.CONFLICT, "응답 기한(48시간)이 지난 신청입니다.");
+	RENTAL_REQUEST_EXPIRED("RENTAL_409_5", HttpStatus.CONFLICT, "응답 기한(48시간)이 지난 신청입니다."),
+	RENTAL_START_DATE_PASSED("RENTAL_409_6", HttpStatus.CONFLICT, "대여 시작일이 지난 신청은 수락할 수 없습니다.");
 
 	private final String code;
 	private final HttpStatus httpStatus;

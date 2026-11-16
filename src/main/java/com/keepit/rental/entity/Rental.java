@@ -221,6 +221,10 @@ public class Rental extends BaseTimeEntity {
 		if (isExpiredAt(now)) {
 			throw new RentalException(RentalErrorCode.RENTAL_REQUEST_EXPIRED);
 		}
+		// 받는 날이 이미 지났으면 그 기간으로는 옷을 넘길 수 없다. 받는 날이 오늘이면 수락할 수 있다.
+		if (startDate.isBefore(now.toLocalDate())) {
+			throw new RentalException(RentalErrorCode.RENTAL_START_DATE_PASSED);
+		}
 		this.acceptedAt = now;
 		return changeStatus(RentalStatus.ACCEPTED, ActorType.OWNER, owner, null);
 	}
