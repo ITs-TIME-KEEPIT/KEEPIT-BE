@@ -84,13 +84,19 @@ public class RentalService {
 		return RentalQuoteResponse.from(draft);
 	}
 
-	/** 대여 신청. 같은 기간 중복 신청은 허용하고, 이미 수락된 예약과 겹치면 막는다. */
-	@Transactional
+	/**
+	 * 대여 신청. 같은 기간 중복 신청은 허용하고, 이미 수락된 예약과 겹치면 막는다.
+	 * 수락과 같은 옷 잠금을 먼저 잡는다. 안 잡으면 "날짜 검사 ~ 저장" 사이에 다른 신청이 수락될 때
+	 * 그 수락이 아직 저장 안 된 이 신청을 못 찾아 무효 처리에서 빠진다.
+	 */
+	@Transactional(isolation = Isolation.READ_COMMITTED)
 	public Long request(Long borrowerId, Long clothingId, RentalPeriod period, TradeMethod tradeMethod,
 			boolean rulesAgreed) {
 		if (!rulesAgreed) {
 			throw new RentalException(RentalErrorCode.RULES_NOT_AGREED);
 		}
+		supportRepository.findClothingForUpdate(clothingId)
+				.orElseThrow(() -> new RentalException(RentalErrorCode.CLOTHING_NOT_FOUND));
 		Rental rental = buildValidatedRequest(borrowerId, clothingId, period, tradeMethod);
 		rentalRepository.save(rental);
 		statusLogRepository.save(rental.createdLog());

@@ -159,6 +159,18 @@ class RentalServiceTest {
 		}
 
 		@Test
+		void 신청도_예약_조회_전에_옷_행부터_잠근다() {
+			rentalService.request(2L, CLOTHING_ID, period(20, 22), TradeMethod.DIRECT, true);
+
+			// 잠금 없이 검사하면, 검사와 저장 사이에 수락된 다른 신청이 이 신청을 무효 처리하지 못한다
+			InOrder order = inOrder(supportRepository, rentalRepository);
+			order.verify(supportRepository).findClothingForUpdate(CLOTHING_ID);
+			order.verify(rentalRepository).findAllByClothingIdAndStatusIn(CLOTHING_ID,
+					RentalSchedulePolicy.RESERVED_STATUSES);
+			order.verify(rentalRepository).save(any(Rental.class));
+		}
+
+		@Test
 		void 없는_옷이면_404() {
 			when(supportRepository.findClothing(99L)).thenReturn(Optional.empty());
 
