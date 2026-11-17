@@ -45,3 +45,16 @@ out/
 ### Logs ###
 logs/
 *.log
+
+### Terraform ###
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.json
+.terraform.tfstate.lock.info
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+!*.tfvars.example
