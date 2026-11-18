@@ -42,7 +42,7 @@ check(app["credit_specification"][0]["cpu_credits"] == "standard", "Prevent unre
 check(app["metadata_options"][0]["http_tokens"] == "required" and app["metadata_options"][0]["http_put_response_hop_limit"] == 2, "Container IAM credentials must use IMDSv2")
 ingress = [item for item in resources.values() if item["type"] == "aws_vpc_security_group_ingress_rule"]
 check(len(ingress) == 2, "Expected only HTTP and internal MySQL ingress")
-check({item["values"]["from_port"] for item in ingress} == {80, 3306}, "SSH, 8080 and other public ports must remain closed")
+check({item["values"]["from_port"] for item in ingress} == {8080, 3306}, "SSH, 80 and other public ports must remain closed")
 mysql = value("aws_vpc_security_group_ingress_rule.mysql")
 check(mysql.get("cidr_ipv4") is None, "MySQL ingress must reference a security group, not a CIDR")
 public_access = value("aws_s3_bucket_public_access_block.files")
@@ -64,7 +64,7 @@ lines = [
     f"- EC2·RDS 가용 영역: `{db['availability_zone']}`",
     f"- 검토 AMI: `{app['ami']}` (Canonical Ubuntu 24.04, x86_64)",
     "- 위 스크립트의 생성 전용·계정·DB 비공개/암호화·포트·S3 접근·고정비 서비스 검사가 통과했습니다.",
-    "- public HTTP 80은 전체 IPv4에 열리는 개발용 계획입니다. TLS 설정 전 실제 사용자 인증·개인정보를 전송하지 않습니다.",
+    "- public HTTP 8080은 전체 IPv4에 열리는 개발용 계획입니다. TLS 설정 전 실제 사용자 인증·개인정보를 전송하지 않습니다.",
     "- 현재 검증은 생성 API 권한, 실제 EC2 부팅·패키지 설치, DB 접속, 앱 실행을 보장하지 않습니다.",
     "- 승인 후 최신 plan을 다시 검토하고 apply합니다. 이 문서는 특정 저장된 plan에 대한 배포 승인이 아닙니다.",
     "",

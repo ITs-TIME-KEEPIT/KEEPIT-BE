@@ -59,7 +59,7 @@ resource "aws_route_table_association" "database" {
 
 resource "aws_security_group" "app" {
   name_prefix = "${local.name}-app-"
-  description = "Nginx ingress; administration through SSM, without SSH"
+  description = "Spring Boot ingress; administration through SSM, without SSH"
   vpc_id      = aws_vpc.main.id
 }
 
@@ -69,9 +69,9 @@ resource "aws_vpc_security_group_ingress_rule" "http" {
   security_group_id = aws_security_group.app.id
   cidr_ipv4         = each.value
   ip_protocol       = "tcp"
-  from_port         = 80
-  to_port           = 80
-  description       = "Development Nginx HTTP; configure TLS before real users"
+  from_port         = 8080
+  to_port           = 8080
+  description       = "Development Spring Boot HTTP; configure TLS before real users"
 }
 
 resource "aws_vpc_security_group_egress_rule" "app" {

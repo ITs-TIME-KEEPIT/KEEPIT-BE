@@ -9,7 +9,7 @@
 | 항목 | 기본 설계 | 선택 이유 |
 | --- | --- | --- |
 | 계정 / 리전 | `781953768324` / 서울 `ap-northeast-2` | 로그인 프로필과 일치, 한국 사용자 접속 고려 |
-| EC2 | `t3.micro`, 2 vCPU / RAM 1 GiB, Ubuntu 24.04 x86_64 | 현재 amd64 Docker 이미지와 호환되는 작은 개발용 구성 |
+| EC2 | `t3.micro`, 2 vCPU / RAM 1 GiB, Ubuntu 24.04 x86_64 | 현재 amd64 Docker 이미지와 호환되는 작은 개발용 구성. 안정적인 상시 구동은 `t3.small` 검토 |
 | EC2 디스크 | 암호화 gp3 8 GiB, swap 1 GiB 포함 | 조회한 공식 AMI 루트 디스크의 최소 크기 |
 | RDS | MySQL 8.4, `db.t4g.micro`, 2 vCPU / RAM 1 GiB, Single-AZ | 작은 MySQL 인스턴스, ARM 여부는 JDBC 클라이언트와 무관 |
 | RDS 디스크 | 암호화 gp3 20 GiB, 자동 증설 끔 | 해당 엔진·클래스의 조회된 최소 용량 |
@@ -20,20 +20,20 @@
 | 고정비 부가 서비스 | NAT Gateway·ALB·EIP·유료 VPC endpoint 미생성 | 개발 환경 고정비 최소화 |
 
 `t3.micro`는 AWS 전체에서 절대 최저가인 EC2가 아니라, 현재 x86 이미지와 JVM 실행을 고려한 최소 시작점입니다.
-nano급(512 MiB)은 Spring Boot·Nginx·OS를 함께 실행하기에 부족할 수 있어 제외했습니다.
+nano급(512 MiB)은 Spring Boot·Docker·OS를 함께 실행하기에 부족할 수 있어 제외했습니다.
 ARM 이미지를 별도 빌드·검증하면 `t4g.micro`를 비교할 수 있지만, 현재 설계의 AMI는 x86 전용입니다.
 1 GiB도 부하·JVM 설정에 따라 OOM이 발생할 수 있으며, 초기 메모리 상한과 실측을 바탕으로 `t3.small`로 조정해야 합니다.
 8 GiB 디스크에는 많은 이미지·빌드 캐시를 보관할 수 없습니다. 빌드는 GitHub Actions에서 수행하고 배포 시 오래된 이미지를 관리합니다.
 
 ```mermaid
 flowchart LR
-    User[개발 사용자] -->|HTTP 80 · 개발용| EC2[EC2 t3.micro\nNginx + Spring Boot 배포 예정]
+    User[개발 사용자] -->|HTTP 8080 · 개발용| EC2[EC2 t3.micro\nSpring Boot 직접 접속]
     Operator[운영자] -->|SSM · 외부 SSH 차단| EC2
     EC2 -->|MySQL 3306 · TLS\nEC2와 같은 AZ| RDS[Private RDS\ndb.t4g.micro · MySQL 8.4]
     EC2 -->|HTTPS · Instance Role| S3[Private S3 Standard]
 ```
 
-기본 웹 인바운드는 `0.0.0.0/0`의 **80번**만 허용합니다. 22·8080·DB 외부 접속은 허용하지 않습니다.
+기본 웹 인바운드는 `0.0.0.0/0`의 **8080번**만 허용합니다. 22·80·DB 외부 접속은 허용하지 않습니다.
 비공개 실습이면 `web_ingress_cidrs = []`, 본인만 접속하려면 본인 공인 IPv4 `/32`로 제한합니다.
 아직 도메인·인증서를 정하지 않아 443은 열지 않습니다. 실제 사용자 로그인·개인정보를 처리하기 전 HTTPS 구성이 별도로 필요합니다.
 
@@ -116,13 +116,19 @@ plan 성공은 EC2/RDS 생성 API의 모든 IAM 권한·실제 부팅·패키지
 `main`에 push되면 `.github/workflows/cd.yml`이 빌드·테스트 후 ECR에 커밋 SHA 이미지로 push하고 SSM으로 EC2에서 Compose를 실행합니다.
 최초 Terraform apply 이후 EC2의 `/opt/keepit/.env`와 RDS 애플리케이션 계정을 준비해야 첫 배포가 성공합니다. `.env`는 GitHub Actions에서 덮어쓰지 않습니다.
 
+환경변수는 첫 배포 전에 AWS 콘솔의 **Systems Manager → Session Manager**로 EC2에 접속해 `/opt/keepit/.env`에 한 번 입력합니다. 앱이 읽는 주요 값은 `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`, `KAKAO_CLIENT_ID`, `KAKAO_CLIENT_SECRET`, `KAKAO_REDIRECT_URI`입니다. `DB_URL`에는 Terraform의 `jdbc_url` 출력을 사용하고, DB 계정에는 별도 생성한 애플리케이션 계정을 사용합니다. 파일은 root 소유·권한 `0600`으로 보관합니다. 실제 비밀값을 Git이나 GitHub Actions 로그에 입력하지 않습니다. 이후 자동 배포는 이 파일을 그대로 읽습니다. 비밀값 변경 시에는 EC2의 파일을 갱신하고 컨테이너를 재시작해야 합니다.
+
+Session Manager 터미널에서 `sudo install -m 600 -o root -g root /dev/null /opt/keepit/.env`로 파일을 만들고 `sudo vi /opt/keepit/.env`로 값을 입력합니다. DB 이름과 비밀번호는 RDS 관리자 계정 대신 별도 앱 계정의 값을 사용합니다. `KAKAO_REDIRECT_URI`는 실제 접속 주소와 8080 포트에 맞춰 등록해야 합니다. EC2가 교체되면 이 로컬 파일도 다시 준비해야 합니다.
+
+기본 `t3.micro`는 1 GiB RAM이라 JVM·Docker·OS를 함께 실행하면 메모리 부족과 swap 지연이 생길 수 있습니다. 루트 디스크 8 GiB도 이미지 누적에 여유가 작습니다. 지속 구동 전에는 메모리와 디스크 사용량을 확인하고, 필요하면 `instance_type = "t3.small"` 및 디스크 용량 확대를 계획해야 합니다.
+
 - `application-prod.yml` datasource 및 필요한 S3 SDK·설정·서비스의 `[AWS 보류]` 항목 활성화
-- EC2의 `/opt/keepit/.env`에 운영 비밀값을 준비. Compose·Nginx 파일은 배포 워크플로가 SSM으로 전달
+- EC2의 `/opt/keepit/.env`에 운영 비밀값을 준비. Compose 파일은 배포 워크플로가 SSM으로 전달
 - RDS 관리자 secret은 운영자가 확인하고 애플리케이션용 DB 사용자를 별도로 생성. 앱에 관리자 계정을 사용하지 않음
 - 앱 DB 비밀번호·JWT·카카오 비밀값은 SSM Parameter Store SecureString 등으로 별도 관리. 값은 Terraform으로 읽어들이지 않음
 - EC2 Role은 해당 S3 버킷 접근, ECR 이미지 pull, SSM 기본 권한을 보유. RDS 관리자 secret 읽기 권한은 부여하지 않음
 - SecureString을 서버에서 가져오려면 해당 경로로 제한한 GetParameter/KMS 권한과 런타임 주입 절차를 별도 추가
-- RDS TLS `require_secure_transport=1` 강제. JVM trust store에 RDS CA를 설치하고 JDBC `sslMode=VERIFY_IDENTITY`로 인증서와 호스트 검증
+- RDS TLS `require_secure_transport=1` 강제. 개발용 `jdbc_url`은 `sslMode=REQUIRED`로 암호화하며, 실서비스 전에 JVM trust store에 RDS CA를 설치하고 `VERIFY_IDENTITY`로 인증서와 호스트를 검증
 - 비공개 S3 파일은 presigned URL 또는 인증된 백엔드로 제공. 단순 공개 object URL 반환은 403이 됨
 - 파일 CORS는 프런트엔드 도메인이 결정된 후 필요한 origin·method만 허용
 - 초기 JVM heap은 작게 시작해 메모리 실측. 예: `JAVA_TOOL_OPTIONS=-Xms128m -Xmx384m`, Compose의 메모리 제한 및 로그 회전 검토

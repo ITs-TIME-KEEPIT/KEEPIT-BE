@@ -12,7 +12,7 @@
 | Auth | Spring Security + JWT (jjwt 0.13), Kakao Login |
 | API Docs | springdoc-openapi 3.x (Swagger UI) |
 | File Storage | AWS S3 (AWS SDK for Java v2) — 보류, 코드 주석 처리 |
-| Infra | Nginx, Docker, Docker Compose (AWS EC2 / RDS / S3는 보류) |
+| Infra | Docker, Docker Compose, 개발용 AWS EC2 / RDS / S3 / ECR |
 | CI/CD | GitHub Actions |
 | Code Review | CodeRabbit |
 | P1 (선택) | Redis, PG 결제, FCM |

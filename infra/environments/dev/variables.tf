@@ -32,7 +32,7 @@ variable "instance_type" {
 }
 
 variable "web_ingress_cidrs" {
-  description = "IPv4 ranges allowed to reach Nginx. Public HTTP is for development only."
+  description = "IPv4 ranges allowed to reach Spring Boot on port 8080. Public HTTP is for development only."
   type        = set(string)
   default     = ["0.0.0.0/0"]
 

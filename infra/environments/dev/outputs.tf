@@ -24,8 +24,8 @@ output "rds_endpoint" {
 }
 
 output "jdbc_url" {
-  description = "Install the RDS CA bundle in the JVM trust store before using VERIFY_IDENTITY."
-  value       = "jdbc:mysql://${aws_db_instance.main.endpoint}/keepit?sslMode=VERIFY_IDENTITY&serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
+  description = "Development TLS URL. Add the RDS CA to the JVM trust store and use VERIFY_IDENTITY before production."
+  value       = "jdbc:mysql://${aws_db_instance.main.endpoint}/keepit?sslMode=REQUIRED&serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
 }
 
 output "rds_admin_secret_arn" {

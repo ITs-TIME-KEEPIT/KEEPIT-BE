@@ -45,14 +45,11 @@ def main() -> None:
 
     repo = Path(__file__).resolve().parents[2]
     compose = base64.b64encode((repo / "docker-compose.prod.yml").read_bytes()).decode()
-    nginx = base64.b64encode((repo / "nginx/nginx.conf").read_bytes()).decode()
     registry = args.image.split("/", 1)[0]
     commands = [
         "set -euo pipefail",
         "test -f /opt/keepit/.env",
-        "install -d -m 0755 /opt/keepit/nginx",
         f"printf '%s' '{compose}' | base64 -d > /opt/keepit/docker-compose.prod.yml",
-        f"printf '%s' '{nginx}' | base64 -d > /opt/keepit/nginx/nginx.conf",
         f"printf '%s\\n' 'DOCKER_IMAGE={args.image}' > /opt/keepit/.image.env",
         "cd /opt/keepit",
         f"aws ecr get-login-password --region {args.region} | docker login --username AWS --password-stdin {registry}",
