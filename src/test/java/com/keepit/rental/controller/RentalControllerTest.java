@@ -25,19 +25,17 @@ import com.keepit.rental.service.RentalService;
 import com.keepit.rental.service.UnavailableReason;
 import java.time.LocalDate;
 import java.util.List;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class RentalControllerTest {
 
-	private static final Long LOGIN_USER_ID = 7L;
+	// 로그인 전 임시 고정 id (11/10 회의 결정). RentalController의 상수와 같아야 한다.
+	private static final Long OWNER_ID = 1L;
+	private static final Long BORROWER_ID = 2L;
 
 	private final RentalService rentalService = mock(RentalService.class);
 	private MockMvc mockMvc;
@@ -46,20 +44,11 @@ class RentalControllerTest {
 	void setUp() {
 		mockMvc = MockMvcBuilders.standaloneSetup(new RentalController(rentalService))
 				.setControllerAdvice(new GlobalExceptionHandler())
-				.setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
 				.build();
-		// JWT 필터가 하는 일: principal에 회원 id를 넣는다
-		SecurityContextHolder.getContext().setAuthentication(
-				new UsernamePasswordAuthenticationToken(LOGIN_USER_ID, null, List.of()));
-	}
-
-	@AfterEach
-	void tearDown() {
-		SecurityContextHolder.clearContext();
 	}
 
 	@Test
-	void 대여_신청은_201과_새_대여_id를_돌려주고_로그인한_회원으로_신청한다() throws Exception {
+	void 대여_신청은_201과_새_대여_id를_돌려주고_고정된_대여자로_신청한다() throws Exception {
 		when(rentalService.request(any(), any(), any(), any(), eq(true))).thenReturn(55L);
 
 		mockMvc.perform(post("/api/v1/clothes/10/rentals")
@@ -72,7 +61,7 @@ class RentalControllerTest {
 				.andExpect(jsonPath("$.code").value("SUCCESS_201"))
 				.andExpect(jsonPath("$.data.rentalId").value(55));
 
-		verify(rentalService).request(LOGIN_USER_ID, 10L,
+		verify(rentalService).request(BORROWER_ID, 10L,
 				new RentalPeriod(LocalDate.of(2026, 11, 20), LocalDate.of(2026, 11, 22)), TradeMethod.DIRECT, true);
 	}
 
@@ -136,19 +125,19 @@ class RentalControllerTest {
 	}
 
 	@Test
-	void 받은_신청_목록은_로그인한_주인과_필터를_넘긴다() throws Exception {
-		when(rentalService.getReceivedRequests(LOGIN_USER_ID, 10L, RentalStatus.REQUESTED)).thenReturn(List.of());
+	void 받은_신청_목록은_고정된_주인과_필터를_넘긴다() throws Exception {
+		when(rentalService.getReceivedRequests(OWNER_ID, 10L, RentalStatus.REQUESTED)).thenReturn(List.of());
 
 		mockMvc.perform(get("/api/v1/me/rental-requests").param("clothesId", "10").param("status", "REQUESTED"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data").isArray());
 
-		verify(rentalService).getReceivedRequests(LOGIN_USER_ID, 10L, RentalStatus.REQUESTED);
+		verify(rentalService).getReceivedRequests(OWNER_ID, 10L, RentalStatus.REQUESTED);
 	}
 
 	@Test
 	void 수락하면_무효_처리된_신청_id를_함께_돌려준다() throws Exception {
-		when(rentalService.accept(LOGIN_USER_ID, 1L)).thenReturn(new RentalAcceptResult(1L, List.of(2L, 3L)));
+		when(rentalService.accept(OWNER_ID, 1L)).thenReturn(new RentalAcceptResult(1L, List.of(2L, 3L)));
 
 		mockMvc.perform(patch("/api/v1/rentals/1/accept"))
 				.andExpect(status().isOk())
@@ -166,7 +155,7 @@ class RentalControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.success").value(true));
 
-		verify(rentalService).reject(LOGIN_USER_ID, 1L, RejectReason.ETC, "일정이 바뀌었어요");
+		verify(rentalService).reject(OWNER_ID, 1L, RejectReason.ETC, "일정이 바뀌었어요");
 	}
 
 	@Test
@@ -179,11 +168,11 @@ class RentalControllerTest {
 	}
 
 	@Test
-	void 취소는_로그인한_회원으로_요청한다() throws Exception {
+	void 취소는_고정된_대여자로_요청한다() throws Exception {
 		mockMvc.perform(patch("/api/v1/rentals/1/cancel"))
 				.andExpect(status().isOk());
 
-		verify(rentalService).cancel(LOGIN_USER_ID, 1L);
+		verify(rentalService).cancel(BORROWER_ID, 1L);
 	}
 
 }
