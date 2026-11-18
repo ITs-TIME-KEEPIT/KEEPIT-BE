@@ -1,6 +1,6 @@
 # KEEPIT 최소 사양 AWS 설계 · 검토안
 
-이 코드는 **개발·실습용 EC2 1대 + RDS 1대 + S3 1개**의 생성 계획입니다.
+이 코드는 **개발·실습용 EC2 1대 + RDS 1대 + S3 1개 + ECR 1개**의 생성 계획입니다.
 2026-11-17에 코드 작성·공식 Provider 설치·유효성 검사·읽기 전용 plan을 수행했습니다.
 **사용자 승인 전 `terraform apply`는 실행하지 않았으며, 이 작업으로 AWS 리소스를 생성하지 않았습니다.**
 
@@ -40,10 +40,10 @@ flowchart LR
 ## 비용과 변경 계획
 
 - [항목별 예상 비용](review/cost-estimate.md): 월 730시간, S3 1GB 가정 **$35.16/월**, 세금·크레딧 차감 전
-- [실제 plan 검토 결과](review/plan-summary.md): **31개 생성, 변경 0개, 삭제 0개**
+- [기존 인프라 plan 검토 결과](review/plan-summary.md): ECR·배포 권한 추가 전 **31개 생성, 변경 0개, 삭제 0개**
 - [공개 단가 원본](review/pricing-seoul.json): AWS Price List API의 서울 리전 응답
 
-EC2·RDS·S3 세 서비스 외에도 네트워크·Security Group·IAM 등의 구성 객체가 포함되어 31개입니다.
+ECR 이미지 저장량·요청과 배포 관련 사용량은 위 기존 인프라 예상 비용에 포함되지 않았습니다.
 크레딧의 실제 잔액·만료·적용 조건은 확인하지 않았으므로 무료라고 보장하지 않습니다.
 전송·요청·RDS CPU credit·초과 백업 등 사용량 비용은 예상 기본 합계 밖에서 발생할 수 있습니다.
 RDS T 계열의 CPU credit 추가 요금과 달리, EC2는 `standard` 모드로 추가 CPU credit 과금 대신 성능 제한을 선택했습니다.
@@ -113,14 +113,14 @@ plan 성공은 EC2/RDS 생성 API의 모든 IAM 권한·실제 부팅·패키지
 
 ## 애플리케이션 연결 시 필요한 작업
 
-현재 코드는 **인프라 및 Docker 호스트 준비까지**입니다. 기존 Java 코드·운영 Compose·CI/CD는 변경하지 않았습니다.
-인프라 생성만으로 KEEPIT API가 배포되지는 않습니다.
+`main`에 push되면 `.github/workflows/cd.yml`이 빌드·테스트 후 ECR에 커밋 SHA 이미지로 push하고 SSM으로 EC2에서 Compose를 실행합니다.
+최초 Terraform apply 이후 EC2의 `/opt/keepit/.env`와 RDS 애플리케이션 계정을 준비해야 첫 배포가 성공합니다. `.env`는 GitHub Actions에서 덮어쓰지 않습니다.
 
 - `application-prod.yml` datasource 및 필요한 S3 SDK·설정·서비스의 `[AWS 보류]` 항목 활성화
-- Docker Hub 이미지·운영 Compose·Nginx 파일을 `/opt/keepit`에 배치하고 실행
+- EC2의 `/opt/keepit/.env`에 운영 비밀값을 준비. Compose·Nginx 파일은 배포 워크플로가 SSM으로 전달
 - RDS 관리자 secret은 운영자가 확인하고 애플리케이션용 DB 사용자를 별도로 생성. 앱에 관리자 계정을 사용하지 않음
 - 앱 DB 비밀번호·JWT·카카오 비밀값은 SSM Parameter Store SecureString 등으로 별도 관리. 값은 Terraform으로 읽어들이지 않음
-- EC2 Role은 해당 S3 버킷의 GetObject·PutObject·DeleteObject와 SSM 기본 권한만 보유. RDS 관리자 secret 읽기 권한은 부여하지 않음
+- EC2 Role은 해당 S3 버킷 접근, ECR 이미지 pull, SSM 기본 권한을 보유. RDS 관리자 secret 읽기 권한은 부여하지 않음
 - SecureString을 서버에서 가져오려면 해당 경로로 제한한 GetParameter/KMS 권한과 런타임 주입 절차를 별도 추가
 - RDS TLS `require_secure_transport=1` 강제. JVM trust store에 RDS CA를 설치하고 JDBC `sslMode=VERIFY_IDENTITY`로 인증서와 호스트 검증
 - 비공개 S3 파일은 presigned URL 또는 인증된 백엔드로 제공. 단순 공개 object URL 반환은 403이 됨

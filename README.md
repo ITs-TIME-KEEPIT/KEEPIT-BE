@@ -63,17 +63,14 @@ src/main/resources
 └── db/migration             # Flyway 마이그레이션 (V1__xxx.sql)
 ```
 
-## AWS (보류)
+## AWS
 
-AWS 세팅(EC2 배포, RDS, S3)은 추후 진행합니다. 관련 코드는 `[AWS 보류]` 표시와 함께 주석 처리되어 있으며, 사용 시 아래를 주석 해제합니다.
+개발용 AWS 인프라와 ECR·SSM 자동 배포 구성은 [infra/README.md](infra/README.md)에 정리되어 있습니다. Terraform 적용과 서버 환경변수 준비 후 `main` push 시 GitHub Actions가 배포합니다. 애플리케이션의 AWS 연동 코드는 `[AWS 보류]` 표시와 함께 주석 처리되어 있으며, 사용 시 아래를 주석 해제합니다.
 
 - `build.gradle`: AWS SDK BOM / `software.amazon.awssdk:s3`
 - `application.yml`의 `aws:` 설정, `application-prod.yml`의 RDS datasource
 - `global/config/S3Config.java`, `global/s3/*`
-- `docs/deploy/cd.yml` (Docker Hub 푸시 → EC2 배포 초안, 활성화 시 `.github/workflows/`로 이동)
 - `.env.example`의 `DB_URL`, `AWS_*`
-
-CD 활성화 시 필요한 GitHub Secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `EC2_HOST`, `EC2_USERNAME`, `EC2_SSH_KEY`, `EC2_DEPLOY_PATH`
 
 ## 협업 컨벤션
 

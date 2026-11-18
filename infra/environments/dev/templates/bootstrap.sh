@@ -17,9 +17,14 @@ fi
 
 # Never include application secrets in user data or cloud-init logs.
 apt-get update
-apt-get -o DPkg::Lock::Timeout=120 install -y --no-install-recommends docker.io docker-compose-v2
+apt-get -o DPkg::Lock::Timeout=120 install -y --no-install-recommends docker.io docker-compose-v2 curl unzip
 apt-get clean
 systemctl enable --now docker
+
+curl --fail --silent --show-error --location https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip --output /tmp/awscliv2.zip
+unzip -q /tmp/awscliv2.zip -d /tmp
+/tmp/aws/install
+rm -rf /tmp/aws /tmp/awscliv2.zip
 
 if snap list amazon-ssm-agent >/dev/null 2>&1; then
   snap start --enable amazon-ssm-agent
