@@ -44,18 +44,18 @@ def main() -> None:
         raise RuntimeError(f"Expected one running keepit-dev instance, found {len(instance_ids)}")
 
     repo = Path(__file__).resolve().parents[2]
-    compose = base64.b64encode((repo / "docker-compose.prod.yml").read_bytes()).decode()
+    compose = base64.b64encode((repo / "docker-compose.dev.yml").read_bytes()).decode()
     registry = args.image.split("/", 1)[0]
     commands = [
         "set -euo pipefail",
         "test -f /opt/keepit/.env",
-        f"printf '%s' '{compose}' | base64 -d > /opt/keepit/docker-compose.prod.yml",
+        f"printf '%s' '{compose}' | base64 -d > /opt/keepit/docker-compose.dev.yml",
         f"printf '%s\\n' 'DOCKER_IMAGE={args.image}' > /opt/keepit/.image.env",
         "cd /opt/keepit",
         f"aws ecr get-login-password --region {args.region} | docker login --username AWS --password-stdin {registry}",
-        "docker compose --env-file .image.env -f docker-compose.prod.yml config --quiet",
-        "docker compose --env-file .image.env -f docker-compose.prod.yml pull",
-        "docker compose --env-file .image.env -f docker-compose.prod.yml up -d --remove-orphans",
+        "docker compose --env-file .image.env -f docker-compose.dev.yml config --quiet",
+        "docker compose --env-file .image.env -f docker-compose.dev.yml pull",
+        "docker compose --env-file .image.env -f docker-compose.dev.yml up -d --remove-orphans",
         "docker image prune -f",
     ]
     command_id = aws(
