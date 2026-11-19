@@ -67,6 +67,12 @@ jobs:
 
       - name: Deploy through SSM
         run: |
+          latest_ref=$(git ls-remote --exit-code origin refs/heads/develop)
+          read -r latest_sha _ <<< "$latest_ref"
+          if [ "$latest_sha" != "$GITHUB_SHA" ]; then
+            echo "::notice::Skipping deployment because develop has moved past this commit."
+            exit 0
+          fi
           python infra/scripts/deploy_ssm.py \
             --region "$AWS_REGION" \
             --image "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$GITHUB_SHA"

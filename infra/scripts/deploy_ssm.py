@@ -47,6 +47,7 @@ def main() -> None:
     compose = base64.b64encode((repo / "docker-compose.dev.yml").read_bytes()).decode()
     registry = args.image.split("/", 1)[0]
     commands = [
+        "#!/bin/bash",
         "set -euo pipefail",
         "test -f /opt/keepit/.env",
         f"printf '%s' '{compose}' | base64 -d > /opt/keepit/docker-compose.dev.yml",
@@ -56,6 +57,20 @@ def main() -> None:
         "docker compose --env-file .image.env -f docker-compose.dev.yml config --quiet",
         "docker compose --env-file .image.env -f docker-compose.dev.yml pull",
         "docker compose --env-file .image.env -f docker-compose.dev.yml up -d --remove-orphans",
+        r'''for ((attempt = 1; attempt <= 60; attempt++)); do
+  if health=$(curl --fail --silent --max-time 2 --write-out '\n%{http_code}' http://127.0.0.1:8080/actuator/health) &&
+     [[ "$health" == *$'\n200' ]] &&
+     grep -Eq '^\{[[:space:]]*"status"[[:space:]]*:[[:space:]]*"UP"' <<< "$health"; then
+    echo "Spring Boot health check passed."
+    break
+  fi
+  if (( attempt == 60 )); then
+    echo "Spring Boot did not report UP on port 8080." >&2
+    docker compose --env-file .image.env -f docker-compose.dev.yml ps
+    exit 1
+  fi
+  sleep 2
+done''',
         "docker image prune -f",
     ]
     command_id = aws(
