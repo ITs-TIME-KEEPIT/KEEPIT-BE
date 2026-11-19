@@ -6,19 +6,26 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.keepit.clothing.dto.ClothingCreateRequest;
+import com.keepit.clothing.dto.ClothingListResponse;
+import com.keepit.clothing.entity.ClothingCategory;
 import com.keepit.clothing.exception.ClothingErrorCode;
 import com.keepit.clothing.exception.ClothingException;
+import com.keepit.clothing.service.ClothingQueryService;
 import com.keepit.clothing.service.ClothingService;
 import com.keepit.global.exception.GlobalExceptionHandler;
 import com.keepit.image.support.TemporaryUser;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -55,13 +62,14 @@ class ClothingControllerTest {
 			""";
 
 	private final ClothingService clothingService = mock(ClothingService.class);
+	private final ClothingQueryService clothingQueryService = mock(ClothingQueryService.class);
 	private MockMvc mockMvc;
 
 	@BeforeEach
 	void setUp() {
 		LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
 		validator.afterPropertiesSet();
-		mockMvc = MockMvcBuilders.standaloneSetup(new ClothingController(clothingService))
+		mockMvc = MockMvcBuilders.standaloneSetup(new ClothingController(clothingService, clothingQueryService))
 				.setControllerAdvice(new GlobalExceptionHandler())
 				.setValidator(validator)
 				.build();
@@ -163,6 +171,55 @@ class ClothingControllerTest {
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.code").value("CLOTHING_400_4"))
 				.andExpect(jsonPath("$.message").value("전면·후면·라벨 사진이 모두 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("목록은 기본 page 0, size 20으로 조회하고 200과 페이지 응답을 돌려준다")
+	void 목록_기본값() throws Exception {
+		when(clothingQueryService.getList(null, 0, 20))
+				.thenReturn(new ClothingListResponse(List.of(), 0, 20, false));
+
+		mockMvc.perform(get(URL))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.code").value("SUCCESS_200"))
+				.andExpect(jsonPath("$.data.content").isArray())
+				.andExpect(jsonPath("$.data.page").value(0))
+				.andExpect(jsonPath("$.data.size").value(20))
+				.andExpect(jsonPath("$.data.hasNext").value(false));
+	}
+
+	@Test
+	@DisplayName("카테고리·page·size를 그대로 서비스에 넘긴다 (size 최대 50)")
+	void 목록_파라미터_전달() throws Exception {
+		when(clothingQueryService.getList(ClothingCategory.DRESS, 2, 50))
+				.thenReturn(new ClothingListResponse(List.of(), 2, 50, true));
+
+		mockMvc.perform(get(URL).param("category", "DRESS").param("page", "2").param("size", "50"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.hasNext").value(true));
+
+		verify(clothingQueryService).getList(ClothingCategory.DRESS, 2, 50);
+	}
+
+	@ParameterizedTest(name = "page={0}, size={1}")
+	@CsvSource({"-1, 20", "0, 0", "0, 51"})
+	@DisplayName("page·size가 범위를 벗어나면 서비스까지 가지 않고 GLOBAL_400_3")
+	void 목록_페이지_범위_오류(String page, String size) throws Exception {
+		mockMvc.perform(get(URL).param("page", page).param("size", size))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("GLOBAL_400_3"));
+
+		verifyNoInteractions(clothingQueryService);
+	}
+
+	@Test
+	@DisplayName("없는 카테고리 값이면 GLOBAL_400_3")
+	void 목록_잘못된_카테고리() throws Exception {
+		mockMvc.perform(get(URL).param("category", "SHOES"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("GLOBAL_400_3"));
+
+		verifyNoInteractions(clothingQueryService);
 	}
 
 }
