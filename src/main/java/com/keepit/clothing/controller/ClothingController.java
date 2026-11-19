@@ -1,6 +1,7 @@
 package com.keepit.clothing.controller;
 
 import com.keepit.clothing.dto.ClothingCreateRequest;
+import com.keepit.clothing.dto.ClothingDetailResponse;
 import com.keepit.clothing.dto.ClothingIdResponse;
 import com.keepit.clothing.dto.ClothingListResponse;
 import com.keepit.clothing.entity.ClothingCategory;
@@ -17,6 +18,7 @@ import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -64,6 +66,14 @@ public class ClothingController {
 			@Min(value = 1, message = "페이지 크기가 올바르지 않습니다.")
 			@Max(value = ClothingQueryService.MAX_PAGE_SIZE, message = "페이지 크기가 올바르지 않습니다.") int size) {
 		return SuccessResponse.ok(clothingQueryService.getList(category, page, size));
+	}
+
+	@Operation(summary = "옷 상세 (API 14, BRW-210)",
+			description = "대여 중지 옷도 status와 함께 준다. 없거나 삭제된 옷은 CLOTHING_404_1. "
+					+ "대여 불가 기간은 등록자가 막아 둔 원본 구간이고, 대여 가능 날짜 계산은 대여 일정 API를 쓴다.")
+	@GetMapping("/{clothesId}")
+	public SuccessResponse<ClothingDetailResponse> getDetail(@PathVariable Long clothesId) {
+		return SuccessResponse.ok(clothingQueryService.getDetail(clothesId));
 	}
 
 }

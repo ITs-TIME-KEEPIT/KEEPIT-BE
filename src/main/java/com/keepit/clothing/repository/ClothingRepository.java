@@ -3,6 +3,7 @@ package com.keepit.clothing.repository;
 import com.keepit.clothing.entity.Clothing;
 import com.keepit.clothing.entity.ClothingCategory;
 import com.keepit.clothing.entity.ClothingStatus;
+import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -26,5 +27,17 @@ public interface ClothingRepository extends JpaRepository<Clothing, Long> {
 			""")
 	Slice<Clothing> findList(@Param("status") ClothingStatus status, @Param("category") ClothingCategory category,
 			Pageable pageable);
+
+	/**
+	 * 상세. 대여 중지(PAUSED) 옷도 주고, 삭제된 옷은 주지 않는다. 지역·등록자를 함께 가져온다.
+	 */
+	@Query("""
+			select c from Clothing c
+			join fetch c.region
+			join fetch c.owner
+			where c.id = :id
+			  and c.deletedAt is null
+			""")
+	Optional<Clothing> findDetail(@Param("id") Long id);
 
 }

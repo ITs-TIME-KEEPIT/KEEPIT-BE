@@ -12,14 +12,25 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.keepit.clothing.dto.ClothingCreateRequest;
+import com.keepit.clothing.dto.ClothingDetailResponse;
 import com.keepit.clothing.dto.ClothingListResponse;
+import com.keepit.clothing.dto.RegionResponse;
 import com.keepit.clothing.entity.ClothingCategory;
+import com.keepit.clothing.entity.ClothingSize;
+import com.keepit.clothing.entity.ClothingStatus;
+import com.keepit.clothing.entity.Color;
+import com.keepit.clothing.entity.LaundryBy;
+import com.keepit.clothing.entity.LaundryMethod;
+import com.keepit.clothing.entity.PhotoPart;
 import com.keepit.clothing.exception.ClothingErrorCode;
 import com.keepit.clothing.exception.ClothingException;
 import com.keepit.clothing.service.ClothingQueryService;
 import com.keepit.clothing.service.ClothingService;
 import com.keepit.global.exception.GlobalExceptionHandler;
 import com.keepit.image.support.TemporaryUser;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -206,6 +217,56 @@ class ClothingControllerTest {
 	@DisplayName("page·size가 범위를 벗어나면 서비스까지 가지 않고 GLOBAL_400_3")
 	void 목록_페이지_범위_오류(String page, String size) throws Exception {
 		mockMvc.perform(get(URL).param("page", page).param("size", size))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("GLOBAL_400_3"));
+
+		verifyNoInteractions(clothingQueryService);
+	}
+
+	@Test
+	@DisplayName("상세는 200과 함께 시각을 ISO 형식(오프셋 없음)으로 준다")
+	void 상세_조회() throws Exception {
+		ClothingDetailResponse detail = new ClothingDetailResponse(42L, ClothingStatus.PAUSED, "원피스", null,
+				ClothingCategory.DRESS, ClothingSize.M,
+				new ClothingDetailResponse.Measurement(new BigDecimal("105.0"), null, null, null, null, null, null, null),
+				List.of(Color.NAVY), false, null, new RegionResponse(14, "서울", "마포구"), 25000, false, null,
+				LaundryBy.BORROWER, LaundryMethod.DRY_CLEAN,
+				List.of(new ClothingDetailResponse.UnavailablePeriod(LocalDate.of(2026, 12, 24), LocalDate.of(2026, 12, 26))),
+				List.of(new ClothingDetailResponse.Photo(PhotoPart.FRONT, 0, "/local-images/clothes/a.jpg",
+						LocalDateTime.of(2026, 11, 19, 21, 40, 3, 512004000))),
+				new ClothingDetailResponse.Owner(1L, "옷장주인", null),
+				LocalDateTime.of(2026, 11, 19, 21, 49, 22));
+		when(clothingQueryService.getDetail(42L)).thenReturn(detail);
+
+		mockMvc.perform(get(URL + "/42"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.clothesId").value(42))
+				.andExpect(jsonPath("$.data.status").value("PAUSED"))
+				.andExpect(jsonPath("$.data.region.sigungu").value("마포구"))
+				.andExpect(jsonPath("$.data.measurement.totalLength").value(105.0))
+				.andExpect(jsonPath("$.data.measurement.hemWidth").doesNotExist())
+				.andExpect(jsonPath("$.data.unavailablePeriods[0].startDate").value("2026-12-24"))
+				.andExpect(jsonPath("$.data.photos[0].serverReceivedAt").value("2026-11-19T21:40:03.512004"))
+				.andExpect(jsonPath("$.data.owner.nickname").value("옷장주인"))
+				.andExpect(jsonPath("$.data.createdAt").value("2026-11-19T21:49:22"));
+	}
+
+	@Test
+	@DisplayName("없거나 삭제된 옷이면 404와 CLOTHING_404_1")
+	void 상세_없음() throws Exception {
+		when(clothingQueryService.getDetail(99L))
+				.thenThrow(new ClothingException(ClothingErrorCode.CLOTHING_NOT_FOUND));
+
+		mockMvc.perform(get(URL + "/99"))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("CLOTHING_404_1"))
+				.andExpect(jsonPath("$.message").value("옷을 찾을 수 없습니다."));
+	}
+
+	@Test
+	@DisplayName("옷 id가 숫자가 아니면 GLOBAL_400_3")
+	void 상세_잘못된_id() throws Exception {
+		mockMvc.perform(get(URL + "/abc"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("GLOBAL_400_3"));
 

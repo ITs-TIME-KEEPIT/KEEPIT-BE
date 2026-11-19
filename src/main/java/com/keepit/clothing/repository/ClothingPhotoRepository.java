@@ -22,4 +22,14 @@ public interface ClothingPhotoRepository extends JpaRepository<ClothingPhoto, Lo
 	List<ClothingPhoto> findByClothingIdsAndPart(@Param("clothingIds") Collection<Long> clothingIds,
 			@Param("photoPart") PhotoPart photoPart);
 
+	/**
+	 * 한 옷의 사진 전체. sortOrder는 중복될 수 있어 id로 한 번 더 정렬한다.
+	 */
+	@Query("""
+			select p from ClothingPhoto p
+			where p.clothing.id = :clothingId
+			order by p.sortOrder, p.id
+			""")
+	List<ClothingPhoto> findAllOfClothing(@Param("clothingId") Long clothingId);
+
 }
