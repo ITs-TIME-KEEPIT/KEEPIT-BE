@@ -61,7 +61,7 @@ class RentalRepositoryTest {
 		owner = em.persist(User.builder().kakaoId("k-owner").nickname("주인").build());
 		otherOwner = em.persist(User.builder().kakaoId("k-other").nickname("다른주인").build());
 		borrower = em.persist(User.builder().kakaoId("k-borrower").nickname("대여자").build());
-		Region region = em.persist(Region.builder().sido("서울").sigungu("마포구").open(true).build());
+		Region region = em.persist(Region.builder().sido("테스트").sigungu("테스트구").open(true).build());
 		dress = em.persist(clothing(owner, region, "원피스"));
 		jacket = em.persist(clothing(owner, region, "자켓"));
 		othersClothing = em.persist(clothing(otherOwner, region, "남의 옷"));
