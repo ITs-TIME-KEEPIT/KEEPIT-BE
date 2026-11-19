@@ -60,7 +60,8 @@ def main() -> None:
         r'''for ((attempt = 1; attempt <= 60; attempt++)); do
   if health=$(curl --fail --silent --max-time 2 --write-out '\n%{http_code}' http://127.0.0.1:8080/actuator/health) &&
      [[ "$health" == *$'\n200' ]] &&
-     grep -Eq '^\{[[:space:]]*"status"[[:space:]]*:[[:space:]]*"UP"' <<< "$health"; then
+     python3 -c 'import json, sys; sys.exit(json.load(sys.stdin).get("status") != "UP")' \
+       <<< "${health%$'\n'*}" 2>/dev/null; then
     echo "Spring Boot health check passed."
     break
   fi
