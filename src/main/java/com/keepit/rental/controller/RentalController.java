@@ -5,6 +5,7 @@ import com.keepit.rental.dto.ReceivedRentalRequestResponse;
 import com.keepit.rental.dto.RentalAcceptResult;
 import com.keepit.rental.dto.RentalAvailabilityResponse;
 import com.keepit.rental.dto.RentalCreateRequest;
+import com.keepit.rental.dto.RentalDetailResponse;
 import com.keepit.rental.dto.RentalIdResponse;
 import com.keepit.rental.dto.RentalQuoteRequest;
 import com.keepit.rental.dto.RentalQuoteResponse;
@@ -105,6 +106,45 @@ public class RentalController {
 			@PathVariable Long rentalId,
 			@Valid @RequestBody RentalRejectRequest request) {
 		rentalService.reject(OWNER_ID, rentalId, request.reason(), request.reasonDetail());
+		return SuccessResponse.ok();
+	}
+
+	@Operation(summary = "거래 상세 조회 (TRD-501)",
+			description = "현재 상태와 다음에 할 일, 단계별 시각을 준다. 거래 당사자만 볼 수 있다.")
+	@GetMapping("/rentals/{rentalId}")
+	public SuccessResponse<RentalDetailResponse> getDetail(
+			@PathVariable Long rentalId,
+			@Parameter(description = "[로그인 전 임시] 조회자 id. 1=옷 주인, 2=대여자")
+			@RequestParam(defaultValue = "2") Long viewerId) {
+		return SuccessResponse.ok(rentalService.getDetail(viewerId, rentalId));
+	}
+
+	@Operation(summary = "전달 완료 처리 (TRD-510)", description = "옷 주인이 옷을 넘겼다고 표시한다. 수락 상태에서만 가능.")
+	@PatchMapping("/rentals/{rentalId}/handover")
+	public SuccessResponse<Void> handOver(@PathVariable Long rentalId) {
+		rentalService.handOver(OWNER_ID, rentalId);
+		return SuccessResponse.ok();
+	}
+
+	@Operation(summary = "수령 확인 처리 (TRD-520)", description = "대여자가 옷을 받았다고 확인한다. 전달 상태에서만 가능.")
+	@PatchMapping("/rentals/{rentalId}/receipt")
+	public SuccessResponse<Void> receive(@PathVariable Long rentalId) {
+		rentalService.receive(BORROWER_ID, rentalId);
+		return SuccessResponse.ok();
+	}
+
+	@Operation(summary = "반납 처리 (TRD-530)", description = "대여자가 옷을 돌려준다. 수령 상태에서만 가능.")
+	@PatchMapping("/rentals/{rentalId}/return")
+	public SuccessResponse<Void> returnItem(@PathVariable Long rentalId) {
+		rentalService.returnItem(BORROWER_ID, rentalId);
+		return SuccessResponse.ok();
+	}
+
+	@Operation(summary = "반납 확인·거래 완료 (TRD-540)",
+			description = "옷 주인이 반납을 확인하고 거래를 끝낸다. 연락처는 완료 7일 뒤 숨겨진다.")
+	@PatchMapping("/rentals/{rentalId}/complete")
+	public SuccessResponse<Void> complete(@PathVariable Long rentalId) {
+		rentalService.complete(OWNER_ID, rentalId);
 		return SuccessResponse.ok();
 	}
 
