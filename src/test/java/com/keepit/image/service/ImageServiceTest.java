@@ -1,9 +1,11 @@
 package com.keepit.image.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -24,12 +26,17 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class ImageServiceTest {
 
@@ -139,6 +146,71 @@ class ImageServiceTest {
 				.isInstanceOf(ImageException.class)
 				.extracting("responseCode").isEqualTo(ImageErrorCode.IMAGE_UPLOAD_FAILED);
 		verify(imageRepository, never()).save(any());
+	}
+
+	@Nested
+	@DisplayName("트랜잭션 롤백 시 업로드 파일 정리")
+	class 롤백_시_파일_정리 {
+
+		@BeforeEach
+		void startSynchronization() {
+			// 실제로는 @Transactional이 켜 주는 트랜잭션 동기화를 단위 테스트에서 직접 켠다
+			TransactionSynchronizationManager.initSynchronization();
+		}
+
+		@AfterEach
+		void clearSynchronization() {
+			TransactionSynchronizationManager.clearSynchronization();
+		}
+
+		private void completeTransaction(int status) {
+			for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
+				synchronization.afterCompletion(status);
+			}
+		}
+
+		@Test
+		@DisplayName("(a) DB 저장이 실패해 롤백되면 저장한 파일을 지운다")
+		void DB_저장_실패_후_롤백이면_삭제() {
+			when(imageRepository.save(any(Image.class))).thenThrow(new DataIntegrityViolationException("fk"));
+
+			assertThatThrownBy(() -> imageService.upload(UPLOADER_ID, file("photo.jpg", JPEG), null))
+					.isInstanceOf(DataIntegrityViolationException.class);
+			completeTransaction(TransactionSynchronization.STATUS_ROLLED_BACK);
+
+			verify(fileUploader).delete("clothes/abc.jpg");
+		}
+
+		@Test
+		@DisplayName("(b) 커밋되면 파일을 지우지 않는다")
+		void 커밋이면_유지() {
+			imageService.upload(UPLOADER_ID, file("photo.jpg", JPEG), null);
+			completeTransaction(TransactionSynchronization.STATUS_COMMITTED);
+
+			verify(fileUploader, never()).delete(any());
+		}
+
+		@Test
+		@DisplayName("(c) 파일 삭제에 실패해도 예외를 밖으로 던지지 않는다")
+		void 삭제_실패는_로그만() {
+			when(imageRepository.save(any(Image.class))).thenThrow(new DataIntegrityViolationException("fk"));
+			doThrow(new UncheckedIOException("locked", new IOException())).when(fileUploader).delete(any());
+			assertThatThrownBy(() -> imageService.upload(UPLOADER_ID, file("photo.jpg", JPEG), null))
+					.isInstanceOf(DataIntegrityViolationException.class);
+
+			assertThatCode(() -> completeTransaction(TransactionSynchronization.STATUS_ROLLED_BACK))
+					.doesNotThrowAnyException();
+			verify(fileUploader).delete("clothes/abc.jpg");
+		}
+
+		@Test
+		@DisplayName("파일을 저장하기 전에 검증에서 거절되면 정리할 것도 등록하지 않는다")
+		void 검증_실패는_등록_없음() {
+			assertThatThrownBy(() -> imageService.upload(UPLOADER_ID, file("photo.jpg", GIF), null))
+					.isInstanceOf(ImageException.class);
+
+			assertThat(TransactionSynchronizationManager.getSynchronizations()).isEmpty();
+		}
 	}
 
 	private void assertImageError(Runnable action, ImageErrorCode expected) {
