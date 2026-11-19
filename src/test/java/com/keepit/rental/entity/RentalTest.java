@@ -259,6 +259,117 @@ class RentalTest {
 
 	}
 
+	@Nested
+	class 거래_진행 {
+
+		/** 수락까지 끝난 거래 */
+		private Rental accepted() {
+			Rental rental = requested();
+			rental.accept(NOW);
+			return rental;
+		}
+
+		@Test
+		void 전달_수령_반납_완료_순서로_진행된다() {
+			Rental rental = accepted();
+
+			assertThat(rental.handOver(NOW.plusDays(9)).getToStatus()).isEqualTo(RentalStatus.HANDED_OVER);
+			assertThat(rental.receive(NOW.plusDays(9).plusHours(2)).getToStatus()).isEqualTo(RentalStatus.RECEIVED);
+			assertThat(rental.returnItem(NOW.plusDays(11)).getToStatus()).isEqualTo(RentalStatus.RETURNED);
+			assertThat(rental.complete(NOW.plusDays(11).plusHours(3)).getToStatus()).isEqualTo(RentalStatus.COMPLETED);
+
+			assertThat(rental.getHandedOverAt()).isEqualTo(NOW.plusDays(9));
+			assertThat(rental.getReceivedAt()).isEqualTo(NOW.plusDays(9).plusHours(2));
+			assertThat(rental.getReturnedAt()).isEqualTo(NOW.plusDays(11));
+			assertThat(rental.getCompletedAt()).isEqualTo(NOW.plusDays(11).plusHours(3));
+		}
+
+		@Test
+		void 전달과_완료는_주인_이력으로_수령과_반납은_대여자_이력으로_남는다() {
+			Rental rental = accepted();
+
+			assertThat(rental.handOver(NOW).getActor()).isSameAs(owner);
+			assertThat(rental.receive(NOW).getActor()).isSameAs(borrower);
+			assertThat(rental.returnItem(NOW).getActor()).isSameAs(borrower);
+			RentalStatusLog completeLog = rental.complete(NOW);
+			assertThat(completeLog.getActor()).isSameAs(owner);
+			assertThat(completeLog.getActorType()).isEqualTo(ActorType.OWNER);
+		}
+
+		@Test
+		void 완료하면_연락처가_7일_뒤_숨겨지도록_기록한다() {
+			Rental rental = accepted();
+			rental.handOver(NOW);
+			rental.receive(NOW);
+			rental.returnItem(NOW);
+
+			rental.complete(NOW.plusDays(11));
+
+			assertThat(rental.getPhoneHiddenAt()).isEqualTo(NOW.plusDays(11).plusDays(7));
+		}
+
+		@Test
+		void 단계를_건너뛸_수_없다() {
+			Rental justAccepted = accepted();
+
+			assertError(() -> justAccepted.receive(NOW), RentalErrorCode.INVALID_RENTAL_STATUS);
+			assertError(() -> justAccepted.returnItem(NOW), RentalErrorCode.INVALID_RENTAL_STATUS);
+			assertError(() -> justAccepted.complete(NOW), RentalErrorCode.INVALID_RENTAL_STATUS);
+			assertThat(justAccepted.getStatus()).isEqualTo(RentalStatus.ACCEPTED);
+		}
+
+		@Test
+		void 수락_전에는_전달할_수_없다() {
+			assertError(() -> requested().handOver(NOW), RentalErrorCode.INVALID_RENTAL_STATUS);
+		}
+
+		@Test
+		void 같은_단계를_두_번_할_수_없다() {
+			Rental rental = accepted();
+			rental.handOver(NOW);
+
+			assertError(() -> rental.handOver(NOW), RentalErrorCode.INVALID_RENTAL_STATUS);
+		}
+
+	}
+
+	@Nested
+	class 다음_할_일 {
+
+		@Test
+		void 상태마다_다음에_할_일과_주체를_알려준다() {
+			Rental rental = requested();
+			assertThat(rental.nextAction()).isEqualTo(RentalNextAction.WAIT_RESPONSE);
+
+			rental.accept(NOW);
+			assertThat(rental.nextAction()).isEqualTo(RentalNextAction.HANDOVER);
+			assertThat(rental.nextAction().getActorType()).isEqualTo(ActorType.OWNER);
+
+			rental.handOver(NOW);
+			assertThat(rental.nextAction()).isEqualTo(RentalNextAction.RECEIVE);
+			assertThat(rental.nextAction().getActorType()).isEqualTo(ActorType.BORROWER);
+
+			rental.receive(NOW);
+			assertThat(rental.nextAction()).isEqualTo(RentalNextAction.RETURN);
+
+			rental.returnItem(NOW);
+			assertThat(rental.nextAction()).isEqualTo(RentalNextAction.COMPLETE);
+
+			rental.complete(NOW);
+			assertThat(rental.nextAction()).isEqualTo(RentalNextAction.NONE);
+			assertThat(rental.nextAction().getActorType()).isNull();
+		}
+
+		@Test
+		void 끝난_거래는_할_일이_없다() {
+			Rental rejected = requested();
+			rejected.reject(RejectReason.TOO_FAR, null);
+
+			assertThat(rejected.nextAction()).isEqualTo(RentalNextAction.NONE);
+		}
+
+	}
+
 	@Test
 	void 주인과_대여자를_id로_구분한다() {
 		Rental rental = requested();
