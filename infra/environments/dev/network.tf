@@ -84,6 +84,16 @@ resource "aws_vpc_security_group_ingress_rule" "http" {
   description       = "Development Spring Boot HTTP; configure TLS before real users"
 }
 
+# 포트를 생략한 개발용 HTTP 요청이 EC2의 기본 포트에 도달하도록 허용합니다.
+resource "aws_vpc_security_group_ingress_rule" "http_default_port" {
+  security_group_id = aws_security_group.app.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "tcp"
+  from_port         = 80
+  to_port           = 80
+  description       = "Development HTTP on the default port"
+}
+
 # EC2가 SSM·ECR·S3·RDS 등에 연결할 수 있도록 IPv4 아웃바운드를 허용합니다.
 resource "aws_vpc_security_group_egress_rule" "app" {
   security_group_id = aws_security_group.app.id
