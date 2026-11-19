@@ -17,8 +17,11 @@ import com.keepit.clothing.entity.LaundryMethod;
 import com.keepit.global.config.ClockConfig;
 import com.keepit.rental.dto.RentalAcceptResult;
 import com.keepit.rental.dto.RentalAvailabilityResponse;
+import com.keepit.rental.dto.RentalDetailResponse;
 import com.keepit.rental.dto.RentalQuoteResponse;
+import com.keepit.rental.entity.ActorType;
 import com.keepit.rental.entity.RejectReason;
+import com.keepit.rental.entity.RentalNextAction;
 import com.keepit.rental.entity.Rental;
 import com.keepit.rental.entity.RentalPeriod;
 import com.keepit.rental.entity.RentalStatus;
@@ -366,6 +369,107 @@ class RentalServiceTest {
 			assertError(() -> rentalService.getAvailability(CLOTHING_ID,
 					LocalDate.of(2026, 11, 11), LocalDate.of(2027, 2, 11)),
 					RentalErrorCode.AVAILABILITY_RANGE_TOO_LONG);
+		}
+
+	}
+
+	@Nested
+	class 거래_진행 {
+
+		/** 수락까지 끝난 거래를 서비스가 찾을 수 있게 해 둔다 */
+		private Rental givenAccepted(Long id) {
+			Rental rental = accepted(id, borrower, period(20, 22), TradeMethod.DIRECT);
+			when(rentalRepository.findById(id)).thenReturn(Optional.of(rental));
+			return rental;
+		}
+
+		@Test
+		void 전달은_주인만_할_수_있고_옷을_잠근_뒤_처리한다() {
+			Rental rental = givenAccepted(1L);
+
+			rentalService.handOver(1L, 1L);
+
+			assertThat(rental.getStatus()).isEqualTo(RentalStatus.HANDED_OVER);
+			verify(supportRepository).findClothingForUpdate(CLOTHING_ID);
+			verify(statusLogRepository).save(any(RentalStatusLog.class));
+		}
+
+		@Test
+		void 대여자는_전달_처리를_할_수_없다() {
+			Rental rental = givenAccepted(1L);
+
+			assertError(() -> rentalService.handOver(2L, 1L), RentalErrorCode.RENTAL_ACCESS_DENIED);
+			assertThat(rental.getStatus()).isEqualTo(RentalStatus.ACCEPTED);
+		}
+
+		@Test
+		void 수령과_반납은_대여자만_할_수_있다() {
+			Rental rental = givenAccepted(1L);
+			rental.handOver(NOW);
+
+			assertError(() -> rentalService.receive(1L, 1L), RentalErrorCode.RENTAL_ACCESS_DENIED);
+			rentalService.receive(2L, 1L);
+			assertThat(rental.getStatus()).isEqualTo(RentalStatus.RECEIVED);
+
+			assertError(() -> rentalService.returnItem(1L, 1L), RentalErrorCode.RENTAL_ACCESS_DENIED);
+			rentalService.returnItem(2L, 1L);
+			assertThat(rental.getStatus()).isEqualTo(RentalStatus.RETURNED);
+		}
+
+		@Test
+		void 완료는_주인만_할_수_있고_연락처_숨김_시각을_남긴다() {
+			Rental rental = givenAccepted(1L);
+			rental.handOver(NOW);
+			rental.receive(NOW);
+			rental.returnItem(NOW);
+
+			assertError(() -> rentalService.complete(2L, 1L), RentalErrorCode.RENTAL_ACCESS_DENIED);
+			rentalService.complete(1L, 1L);
+
+			assertThat(rental.getStatus()).isEqualTo(RentalStatus.COMPLETED);
+			assertThat(rental.getPhoneHiddenAt()).isEqualTo(NOW.plusDays(7));
+		}
+
+		@Test
+		void 단계를_건너뛰면_상태_오류() {
+			givenAccepted(1L);
+
+			assertError(() -> rentalService.receive(2L, 1L), RentalErrorCode.INVALID_RENTAL_STATUS);
+		}
+
+	}
+
+	@Nested
+	class 거래_상세 {
+
+		@Test
+		void 주인이_보면_역할이_주인이고_다음_할_일을_알려준다() {
+			Rental rental = accepted(1L, borrower, period(20, 22), TradeMethod.DIRECT);
+			when(rentalRepository.findById(1L)).thenReturn(Optional.of(rental));
+
+			RentalDetailResponse detail = rentalService.getDetail(1L, 1L);
+
+			assertThat(detail.viewerRole()).isEqualTo(ActorType.OWNER);
+			assertThat(detail.status()).isEqualTo(RentalStatus.ACCEPTED);
+			assertThat(detail.nextAction()).isEqualTo(RentalNextAction.HANDOVER);
+			assertThat(detail.nextActionBy()).isEqualTo(ActorType.OWNER);
+			assertThat(detail.rentalFee()).isEqualTo(15000);
+		}
+
+		@Test
+		void 대여자가_보면_역할이_대여자다() {
+			Rental rental = requested(1L, borrower, period(20, 22), TradeMethod.DIRECT);
+			when(rentalRepository.findById(1L)).thenReturn(Optional.of(rental));
+
+			assertThat(rentalService.getDetail(2L, 1L).viewerRole()).isEqualTo(ActorType.BORROWER);
+		}
+
+		@Test
+		void 당사자가_아니면_볼_수_없다() {
+			Rental rental = requested(1L, borrower, period(20, 22), TradeMethod.DIRECT);
+			when(rentalRepository.findById(1L)).thenReturn(Optional.of(rental));
+
+			assertError(() -> rentalService.getDetail(3L, 1L), RentalErrorCode.RENTAL_ACCESS_DENIED);
 		}
 
 	}
