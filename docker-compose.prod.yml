@@ -1,5 +1,4 @@
 # 운영 서버용: Nginx + Spring Boot 앱
-#   [AWS 보류] 배포 서버(EC2)와 운영 DB(RDS)는 추후 결정
 #   배포 디렉터리에 이 파일, nginx/, .env 를 둔다.
 #   docker compose -f docker-compose.prod.yml up -d
 services:

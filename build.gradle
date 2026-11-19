@@ -26,15 +26,14 @@ repositories {
 ext {
 	springdocVersion = '3.1.1'
 	jjwtVersion = '0.13.0'
-	// awsSdkVersion = '2.56.0'  // [AWS 보류]
+	awsSdkVersion = '2.56.0'
 }
 
-// [AWS 보류] AWS 세팅은 추후 진행 - S3 사용 시 주석 해제
-// dependencyManagement {
-// 	imports {
-// 		mavenBom "software.amazon.awssdk:bom:${awsSdkVersion}"
-// 	}
-// }
+dependencyManagement {
+	imports {
+		mavenBom "software.amazon.awssdk:bom:${awsSdkVersion}"
+	}
+}
 
 dependencies {
 	// Spring Boot
@@ -57,8 +56,7 @@ dependencies {
 	// API Documentation
 	implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
 
-	// [AWS 보류] AWS S3 (SDK for Java v2) - 추후 주석 해제
-	// implementation 'software.amazon.awssdk:s3'
+	implementation 'software.amazon.awssdk:s3'
 
 	// [P1] Redis - 필요 시 주석 해제 (application.yml의 redis 설정도 함께 활성화)
 	// implementation 'org.springframework.boot:spring-boot-starter-data-redis'
