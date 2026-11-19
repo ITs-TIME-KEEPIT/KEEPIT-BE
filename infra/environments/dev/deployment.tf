@@ -49,11 +49,11 @@ data "aws_iam_policy_document" "github_deploy_trust" {
       variable = "token.actions.githubusercontent.com:aud"
       values   = ["sts.amazonaws.com"]
     }
-    # KEEPIT-BE 저장소의 develop 브랜치에서 발급된 토큰으로 역할 인수를 제한합니다.
+    # GitHub의 ID 기반 OIDC 주체로 KEEPIT-BE 저장소의 develop 브랜치를 확인합니다.
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:ITs-TIME-KEEPIT/KEEPIT-BE:ref:refs/heads/develop"]
+      values   = ["repo:ITs-TIME-KEEPIT@342240231/KEEPIT-BE@1418129186:ref:refs/heads/develop"]
     }
   }
 }
@@ -76,7 +76,7 @@ data "aws_iam_policy_document" "github_deploy" {
   statement {
     sid = "PushImage"
     actions = [
-      "ecr:BatchCheckLayerAvailability", "ecr:CompleteLayerUpload",
+      "ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:CompleteLayerUpload",
       "ecr:DescribeImages", "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart",
     ]
     resources = [aws_ecr_repository.app.arn]
