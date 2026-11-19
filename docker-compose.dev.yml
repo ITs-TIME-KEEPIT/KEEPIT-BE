@@ -1,4 +1,4 @@
-# Development EC2: Spring Boot is reachable directly on port 8080.
+# Development EC2: host ports 80 and 8080 both reach Spring Boot on port 8080.
 services:
   app:
     image: ${DOCKER_IMAGE}
@@ -10,3 +10,4 @@ services:
       SPRING_PROFILES_ACTIVE: dev
     ports:
       - "8080:8080"
+      - "80:8080"

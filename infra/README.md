@@ -26,14 +26,14 @@ ARM 이미지를 별도 빌드·검증하면 `t4g.micro`를 비교할 수 있지
 
 ```mermaid
 flowchart LR
-    User[개발 사용자] -->|HTTP 8080 · 개발용| EC2[EC2 t3.micro\nSpring Boot 직접 접속]
+    User[개발 사용자] -->|HTTP 80 또는 8080 · 개발용| EC2[EC2 t3.micro\nSpring Boot 직접 접속]
     Operator[운영자] -->|SSM · 외부 SSH 차단| EC2
     EC2 -->|MySQL 3306 · TLS\nEC2와 같은 AZ| RDS[Private RDS\ndb.t4g.micro · MySQL 8.4]
     EC2 -->|HTTPS · Instance Role| S3[Private S3 Standard]
 ```
 
-`network.tf`의 `for_each = toset(["0.0.0.0/0"])`는 모든 IPv4에서 개발 EC2의 **8080번**에 접속할 수 있게 합니다. 22·80·DB 외부 접속은 허용하지 않습니다.
-비공개 실습이면 `toset([])`로, 본인만 접속하려면 본인 공인 IPv4의 `/32` 대역으로 수정합니다.
+`network.tf`에서 개발 EC2의 **80번과 8080번**을 전체 IPv4(`0.0.0.0/0`)에 허용합니다. Compose는 두 포트를 Spring Boot의 8080으로 연결합니다. 22번과 DB 외부 접속은 허용하지 않습니다.
+비공개 실습이면 두 HTTP 인바운드 규칙을 제외하고, 본인만 접속하려면 두 규칙의 접근 범위를 본인 공인 IPv4의 `/32` 대역으로 수정합니다.
 아직 도메인·인증서를 정하지 않아 443은 열지 않습니다. 실제 사용자 로그인·개인정보를 처리하기 전 HTTPS 구성이 별도로 필요합니다.
 
 ## 비용과 변경 계획
@@ -100,7 +100,7 @@ terraform show -json review.tfplan | python ../../scripts/review_plan.py
 python ../../scripts/estimate_cost.py
 ```
 
-개발 환경 값은 해당 `.tf` 파일에서 변경합니다. 계정·리전은 `providers.tf`, EC2 사양은 `compute.tf`, 8080 접근 대역은 `network.tf`, MySQL 버전은 `database.tf`에서 지정합니다.
+개발 환경 값은 해당 `.tf` 파일에서 변경합니다. 계정·리전은 `providers.tf`, EC2 사양은 `compute.tf`, 80·8080 접근 대역은 `network.tf`, MySQL 버전은 `database.tf`에서 지정합니다.
 
 `review_plan.py`는 서울·t3.micro 예시 구성을 검사하는 검토 도구입니다.
 리전·사양·인바운드 정책 변경 시 코드와 요금, 검증 조건 및 검토 문서를 함께 갱신해야 합니다.
@@ -127,7 +127,7 @@ PR이 `develop`에 병합되어 push 이벤트가 발생하면 `.github/workflow
 | 환경 | Compose | Spring 프로필 | DB | 외부 포트 | 현재 배포 트리거 |
 | --- | --- | --- | --- | --- | --- |
 | 로컬 PC | `docker-compose.yml` | `local` (IDE/bootRun) | 로컬 MySQL 컨테이너 | 앱 8080은 IDE에서 실행 | 개발자가 직접 실행 |
-| 개발 EC2 | `docker-compose.dev.yml` | `dev` | 비공개 RDS, EC2의 `/opt/keepit/.env` | 앱 8080 | `develop` push 또는 `develop`에서 수동 실행 |
+| 개발 EC2 | `docker-compose.dev.yml` | `dev` | 비공개 RDS, EC2의 `/opt/keepit/.env` | 호스트 80·8080 → 앱 8080 | `develop` push 또는 `develop`에서 수동 실행 |
 | 향후 운영 | `docker-compose.prod.yml` | `prod` | 운영 전용 DB·비밀값 필요 | Nginx 80 | 아직 없음 |
 
 운영 배포는 개발 배포의 설정을 바꾸는 방식이 아니라 별도 인프라·환경변수·권한·워크플로를 마련해야 합니다. 운영 배포 트리거는 현재 정의되지 않았습니다. 예를 들어 릴리스 태그를 만들 때 운영 전용 GitHub Actions 작업을 실행하도록 나중에 설정할 수 있습니다.
