@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 옷 사진 업로드 API (API 17번).
+ * 옷 사진 업로드 API (COM-003, REG-310 / API 명세 17번).
  * 로그인(JWT) 구현 전까지는 사용자 id를 TemporaryUser.ID로 고정한다.
  */
 @Tag(name = "Image", description = "이미지 업로드")
@@ -33,7 +33,7 @@ public class ImageController {
 
 	private final ImageService imageService;
 
-	@Operation(summary = "옷 사진 업로드 (API 17)",
+	@Operation(summary = "옷 사진 업로드 (COM-003, REG-310)",
 			description = "JPEG·PNG만 받고, 파일명 확장자가 실제 형식과 같아야 한다(jpg·jpeg·png, 대소문자 무시). "
 					+ "업로드된 이미지는 미연결 상태로 저장되고 옷 등록 때 연결된다. 응답의 시각은 모두 KST.")
 	@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

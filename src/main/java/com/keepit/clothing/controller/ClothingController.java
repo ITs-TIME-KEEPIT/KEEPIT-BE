@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 옷 등록·조회 API (API 13·14·18번).
+ * 옷 등록·조회 API (REG-320·330·340, BRW-201, BRW-210 / API 명세 13·14·18번).
  * 로그인(JWT) 구현 전까지는 등록자 id를 TemporaryUser.ID로 고정한다.
  * 응답의 시각은 모두 KST이고, 이미지는 URL로 준다(S3에서는 presigned 10분 유효).
  */
@@ -39,7 +39,7 @@ public class ClothingController {
 	private final ClothingService clothingService;
 	private final ClothingQueryService clothingQueryService;
 
-	@Operation(summary = "옷 등록 (API 18)",
+	@Operation(summary = "옷 등록 (REG-320, REG-330, REG-340)",
 			description = "먼저 이미지 업로드 API로 받은 imageId를 photos에 담아 보낸다. "
 					+ "일반 사진은 전면·후면·라벨이 각각 1장 이상, 3장 이상이고 하자 사진을 합쳐 10장까지. "
 					+ "하자 없음이면 하자 사진·설명은 무시한다. 잡화(ACC)는 사이즈 FREE·실측 없음으로 저장한다. "
@@ -52,7 +52,7 @@ public class ClothingController {
 		return ResponseEntity.status(body.getHttpStatus()).body(body);
 	}
 
-	@Operation(summary = "옷 목록 (API 13, BRW-201)",
+	@Operation(summary = "옷 목록 (BRW-201)",
 			description = "대여 가능한 옷을 최신 등록순으로 준다(대여 중지·삭제 제외). page는 0부터, size는 1~50.")
 	@GetMapping
 	public SuccessResponse<ClothingListResponse> getList(
@@ -68,7 +68,7 @@ public class ClothingController {
 		return SuccessResponse.ok(clothingQueryService.getList(category, page, size));
 	}
 
-	@Operation(summary = "옷 상세 (API 14, BRW-210)",
+	@Operation(summary = "옷 상세 (BRW-210)",
 			description = "대여 중지 옷도 status와 함께 준다. 없거나 삭제된 옷은 CLOTHING_404_1. "
 					+ "대여 불가 기간은 등록자가 막아 둔 원본 구간이고, 대여 가능 날짜 계산은 대여 일정 API를 쓴다.")
 	@GetMapping("/{clothesId}")
