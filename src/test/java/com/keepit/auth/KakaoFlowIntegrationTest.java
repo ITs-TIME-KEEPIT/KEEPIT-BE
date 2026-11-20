@@ -253,6 +253,42 @@ class KakaoFlowIntegrationTest {
 	}
 
 	@Test
+	void rejoiningKeepsOldDevicesSignedOut() throws Exception {
+		User user = users.saveAndFlush(User.builder().kakaoId("24132").nickname("첫가입").phone("01012345678").build());
+		String beforeDeletion = members.login("24132").accessToken();
+		var secret = io.jsonwebtoken.security.Keys.hmacShaKeyFor("test-secret-key-must-be-at-least-32-bytes-long!!"
+				.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+		String legacyAccess = io.jsonwebtoken.Jwts.builder().subject(user.getId().toString()).claim("type", "access")
+				.claim("role", "USER").expiration(new java.util.Date(System.currentTimeMillis() + 60000))
+				.signWith(secret).compact();
+		mvc.perform(get("/api/v1/clothes").header("Authorization", "Bearer " + legacyAccess)).andExpect(status().isOk());
+		jdbc.update("UPDATE users SET status='DELETED',deleted_at=NOW(6) WHERE id=?", user.getId());
+		var restore = members.login("24132");
+		var restored = mvc.perform(multipart(PROFILE).header("Authorization", "Bearer " + restore.signupToken())
+				.param("nickname", "재가입").param("phone", "01077778888")).andExpect(status().isOk())
+				.andReturn().getResponse();
+		String newAccess = json.readTree(restored.getContentAsByteArray()).get("data").get("accessToken").asString();
+		mvc.perform(get("/api/v1/clothes").header("Authorization", "Bearer " + beforeDeletion))
+				.andExpect(status().isUnauthorized());
+		mvc.perform(get("/api/v1/clothes").header("Authorization", "Bearer " + legacyAccess)).andExpect(status().isUnauthorized());
+		mvc.perform(get("/api/v1/clothes").header("Authorization", "Bearer " + newAccess)).andExpect(status().isOk());
+	}
+
+	@Test
+	void expiredSignupTokenCannotFinishProfile() throws Exception {
+		User user = users.saveAndFlush(User.builder().kakaoId("24133").build());
+		var secret = io.jsonwebtoken.security.Keys.hmacShaKeyFor("test-secret-key-must-be-at-least-32-bytes-long!!"
+				.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+		String expired = io.jsonwebtoken.Jwts.builder().subject(user.getId().toString()).claim("type", "signup")
+				.claim("registration", user.registrationContext()).expiration(new java.util.Date(1)).signWith(secret).compact();
+		mvc.perform(multipart(PROFILE).header("Authorization", "Bearer " + expired)
+				.param("nickname", "회원").param("phone", "01012345678")).andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.code").value("AUTH_401_2"));
+		assertThat(users.findById(user.getId()).orElseThrow().isProfileComplete()).isFalse();
+		assertThat(tokens.findByUserId(user.getId())).isEmpty();
+	}
+
+	@Test
 	void callbackRejectsMissingBrowserStateAndHandlesCancellation() throws Exception {
 		mvc.perform(get("/api/v1/auth/kakao/callback").param("code", "123"))
 				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.success").value(false));

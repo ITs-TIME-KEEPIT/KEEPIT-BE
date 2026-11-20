@@ -49,7 +49,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 		// 계정·프로필 상태와 권한은 발급 시점과 달라질 수 있어 요청 시 DB를 기준으로 판정한다.
 		User user = users.findById(identity.get().memberId()).orElse(null);
-		if (user == null || user.getStatus() == UserStatus.DELETED && !identity.get().signup()) {
+		boolean access = !identity.get().signup();
+		// 복구 때 세대가 증가하므로 재가입 이전 기기의 토큰을 재사용할 수 없다.
+		if (user == null || (access && (user.getStatus() == UserStatus.DELETED
+				|| user.getAuthGeneration() != identity.get().generation()))) {
 			chain.doFilter(request, response);
 			return;
 		}

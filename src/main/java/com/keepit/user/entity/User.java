@@ -52,6 +52,9 @@ public class User extends BaseTimeEntity {
 	@Column(nullable = false, length = 30)
 	private UserStatus status;
 
+	@Column(name = "auth_generation", nullable = false)
+	private long authGeneration;
+
 	@Column(name = "suspend_reason")
 	private String suspendReason;
 
@@ -79,7 +82,7 @@ public class User extends BaseTimeEntity {
 
 	// 탈퇴 전 발급된 등록 토큰으로 새 재가입을 대신할 수 없도록 가입 상태를 구분한다.
 	public String registrationContext() {
-		return status == UserStatus.DELETED ? "DELETED:" + deletedAt : status.name();
+		return status == UserStatus.DELETED ? "DELETED:" + authGeneration + ":" + deletedAt : status + ":" + authGeneration;
 	}
 
 	public void completeProfile(String nickname, String phone, String profileImageKey) {
@@ -88,6 +91,8 @@ public class User extends BaseTimeEntity {
 		this.phone = phone;
 		this.profileImageKey = profileImageKey;
 		if (status == UserStatus.DELETED) {
+			// 같은 초에 재가입하더라도 탈퇴 전 토큰과 구분할 세대를 올린다.
+			authGeneration++;
 			status = UserStatus.ACTIVE;
 			deletedAt = null;
 			deleteReason = null;

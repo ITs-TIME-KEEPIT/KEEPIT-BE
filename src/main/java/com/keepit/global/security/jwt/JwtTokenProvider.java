@@ -47,10 +47,15 @@ public class JwtTokenProvider {
 	}
 
 	public String createAccessToken(Long memberId, String role) {
+		return createAccessToken(memberId, role, 0);
+	}
+
+	public String createAccessToken(Long memberId, String role, long generation) {
 		Date now = new Date();
 		return Jwts.builder()
 				.subject(String.valueOf(memberId))
 				.claim(TYPE_CLAIM, ACCESS_TYPE)
+				.claim("generation", generation)
 				.claim(ROLE_CLAIM, role)
 				.issuedAt(now)
 				.expiration(new Date(now.getTime() + accessTokenExpiration))
@@ -147,7 +152,7 @@ public class JwtTokenProvider {
 		return REFRESH_TYPE.equals(parseClaims(token).get(TYPE_CLAIM, String.class));
 	}
 
-	public record RequestIdentity(long memberId, boolean signup) {}
+	public record RequestIdentity(long memberId, boolean signup, long generation) {}
 
 	// 보호된 경로에서 쓸 토큰만 서명과 만료까지 한 번에 검증한다.
 	public java.util.Optional<RequestIdentity> readRequestIdentity(String token) {
@@ -157,7 +162,10 @@ public class JwtTokenProvider {
 			if (!ACCESS_TYPE.equals(type) && !SIGNUP_TYPE.equals(type)) {
 				return java.util.Optional.empty();
 			}
-			return java.util.Optional.of(new RequestIdentity(Long.parseLong(claims.getSubject()), SIGNUP_TYPE.equals(type)));
+			// 이전 버전의 토큰은 최초 가입 세대(0)에서 만료 시점까지 사용할 수 있다.
+			Long generation = claims.get("generation", Long.class);
+			return java.util.Optional.of(new RequestIdentity(Long.parseLong(claims.getSubject()), SIGNUP_TYPE.equals(type),
+					generation == null ? 0 : generation));
 		} catch (JwtException | IllegalArgumentException exception) {
 			return java.util.Optional.empty();
 		}

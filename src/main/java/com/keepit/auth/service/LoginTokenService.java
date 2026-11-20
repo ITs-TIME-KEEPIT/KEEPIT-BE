@@ -31,7 +31,7 @@ public class LoginTokenService {
 		}
 
 		// 리프레시 토큰 원문은 클라이언트에만 전달하고 DB에는 해시를 남긴다.
-		String access = jwt.createAccessToken(user.getId(), user.getRole().name());
+		String access = jwt.createAccessToken(user.getId(), user.getRole().name(), user.getAuthGeneration());
 		String refresh = jwt.createRefreshToken(user.getId());
 		String hash = hash(refresh);
 		var expiresAt = jwt.getExpiresAt(refresh);
