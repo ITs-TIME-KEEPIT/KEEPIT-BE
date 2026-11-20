@@ -16,7 +16,7 @@ class KakaoLoginStartTest {
 	void loginRedirectBindsUniqueStateToCallbackCookie() {
 		var jwt = new JwtTokenProvider(new JwtProperties("test-secret-key-must-be-at-least-32-bytes-long!!", 60000, 120000));
 		var properties = new KakaoProperties("app-key", "local-test-secret", "https://keepit.test/api/v1/auth/kakao/callback");
-		var controller = new KakaoLoginController(new KakaoOAuthClient(properties), properties, jwt);
+		var controller = new KakaoLoginController(new KakaoOAuthClient(properties), properties, jwt, org.mockito.Mockito.mock(com.keepit.auth.service.KakaoLoginService.class));
 
 		var response = controller.login();
 		var uri = UriComponentsBuilder.fromUri(response.getHeaders().getLocation()).build();

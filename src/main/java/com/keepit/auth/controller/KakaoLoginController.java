@@ -1,5 +1,13 @@
 package com.keepit.auth.controller;
 
+import com.keepit.auth.dto.LoginResult;
+import com.keepit.auth.exception.AuthErrorCode;
+import com.keepit.auth.service.KakaoLoginService;
+import com.keepit.global.exception.BaseException;
+import com.keepit.global.response.SuccessResponse;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.web.bind.annotation.CookieValue;
+import org.springframework.web.bind.annotation.RequestParam;
 import com.keepit.global.oauth.kakao.KakaoOAuthClient;
 import com.keepit.global.oauth.kakao.KakaoProperties;
 import com.keepit.global.security.jwt.JwtTokenProvider;
@@ -24,6 +32,7 @@ public class KakaoLoginController {
 	private final KakaoOAuthClient kakao;
 	private final KakaoProperties properties;
 	private final JwtTokenProvider jwt;
+	private final KakaoLoginService loginService;
 
 	@GetMapping("/login")
 	public ResponseEntity<Void> login() {
@@ -35,6 +44,24 @@ public class KakaoLoginController {
 				.cacheControl(CacheControl.noStore())
 				.header(HttpHeaders.SET_COOKIE, cookie.toString())
 				.build();
+	}
+
+	@GetMapping("/callback")
+	public SuccessResponse<LoginResult> callback(@RequestParam(required = false) String code,
+			@RequestParam(required = false) String error, @RequestParam(required = false) String state,
+			@CookieValue(name = STATE_COOKIE, required = false) String cookie, HttpServletResponse response) {
+		// 콜백의 성공과 실패 모두 브라우저의 이번 시도 쿠키를 지우고 자격 증명 응답 캐시를 막는다.
+		response.addHeader(HttpHeaders.SET_COOKIE, stateCookie("", Duration.ZERO).toString());
+		response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+		if (state == null || !state.equals(cookie) || !jwt.isOAuthState(state)) {
+			throw new BaseException(AuthErrorCode.INVALID_CALLBACK);
+		}
+		if (error != null || code == null || code.isBlank()) {
+			throw new BaseException(AuthErrorCode.INVALID_CALLBACK);
+		}
+
+		// 서버가 카카오로부터 확인한 사용자만 회원 처리에 넘긴다.
+		return SuccessResponse.ok(loginService.login(code));
 	}
 
 	private ResponseCookie stateCookie(String value, Duration age) {
