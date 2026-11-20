@@ -177,6 +177,8 @@ class KakaoFlowIntegrationTest {
 				.andExpect(jsonPath("$.code").value("AUTH_403_2"));
 		jdbc.update("UPDATE users SET nickname='회원',phone='01012345678' WHERE id=?", user.getId());
 		mvc.perform(get(path).header("Authorization", access)).andExpect(status().isOk());
+		mvc.perform(get(path).header("Authorization", "Bearer " + signup)).andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.code").value("GLOBAL_401"));
 		jdbc.update("UPDATE users SET status='SUSPENDED' WHERE id=?", user.getId());
 		mvc.perform(get(path).header("Authorization", access)).andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.code").value("AUTH_403_1"));

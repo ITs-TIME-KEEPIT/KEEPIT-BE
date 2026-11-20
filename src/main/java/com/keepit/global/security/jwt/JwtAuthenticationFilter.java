@@ -57,8 +57,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 			denied.write(response, AuthErrorCode.SUSPENDED);
 			return;
 		}
-		if (identity.get().signup() || !user.isProfileComplete()) {
+		if (user.getStatus() == UserStatus.DELETED || !user.isProfileComplete()) {
 			denied.write(response, AuthErrorCode.PROFILE_REQUIRED);
+			return;
+		}
+
+		// 다른 기기에서 등록을 이미 마쳤다면 남은 등록 토큰으로 다시 프로필 입력을 요청하지 않는다.
+		if (identity.get().signup()) {
+			chain.doFilter(request, response);
 			return;
 		}
 
