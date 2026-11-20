@@ -5,8 +5,10 @@ import com.keepit.clothing.entity.ClothingStatus;
 import com.keepit.rental.dto.ReceivedRentalRequestResponse;
 import com.keepit.rental.dto.RentalAcceptResult;
 import com.keepit.rental.dto.RentalAvailabilityResponse;
+import com.keepit.rental.dto.RentalDetailResponse;
 import com.keepit.rental.dto.RentalAvailabilityResponse.UnavailableDate;
 import com.keepit.rental.dto.RentalQuoteResponse;
+import com.keepit.rental.entity.ActorType;
 import com.keepit.rental.entity.RejectReason;
 import com.keepit.rental.entity.Rental;
 import com.keepit.rental.entity.RentalPeriod;
@@ -166,6 +168,58 @@ public class RentalService {
 			throw new RentalException(RentalErrorCode.RENTAL_ACCESS_DENIED);
 		}
 		statusLogRepository.save(rental.cancelByBorrower());
+	}
+
+	/** 옷 주인이 옷을 넘겼다고 표시한다 (TRD-510). */
+	@Transactional(isolation = Isolation.READ_COMMITTED)
+	public void handOver(Long ownerId, Long rentalId) {
+		Rental rental = lockClothingAndGetRental(rentalId);
+		if (!rental.isOwnedBy(ownerId)) {
+			throw new RentalException(RentalErrorCode.RENTAL_ACCESS_DENIED);
+		}
+		statusLogRepository.save(rental.handOver(LocalDateTime.now(clock)));
+	}
+
+	/** 대여자가 옷을 받았다고 확인한다 (TRD-520). */
+	@Transactional(isolation = Isolation.READ_COMMITTED)
+	public void receive(Long borrowerId, Long rentalId) {
+		Rental rental = lockClothingAndGetRental(rentalId);
+		if (!rental.isBorrowedBy(borrowerId)) {
+			throw new RentalException(RentalErrorCode.RENTAL_ACCESS_DENIED);
+		}
+		statusLogRepository.save(rental.receive(LocalDateTime.now(clock)));
+	}
+
+	/** 대여자가 옷을 돌려준다 (TRD-530). */
+	@Transactional(isolation = Isolation.READ_COMMITTED)
+	public void returnItem(Long borrowerId, Long rentalId) {
+		Rental rental = lockClothingAndGetRental(rentalId);
+		if (!rental.isBorrowedBy(borrowerId)) {
+			throw new RentalException(RentalErrorCode.RENTAL_ACCESS_DENIED);
+		}
+		statusLogRepository.save(rental.returnItem(LocalDateTime.now(clock)));
+	}
+
+	/** 옷 주인이 반납을 확인하고 거래를 끝낸다 (TRD-540). */
+	@Transactional(isolation = Isolation.READ_COMMITTED)
+	public void complete(Long ownerId, Long rentalId) {
+		Rental rental = lockClothingAndGetRental(rentalId);
+		if (!rental.isOwnedBy(ownerId)) {
+			throw new RentalException(RentalErrorCode.RENTAL_ACCESS_DENIED);
+		}
+		statusLogRepository.save(rental.complete(LocalDateTime.now(clock)));
+	}
+
+	/** 거래 상세 (TRD-501). 거래 당사자(주인·대여자)만 볼 수 있다. */
+	public RentalDetailResponse getDetail(Long userId, Long rentalId) {
+		Rental rental = getRental(rentalId);
+		if (rental.isOwnedBy(userId)) {
+			return RentalDetailResponse.of(rental, ActorType.OWNER);
+		}
+		if (rental.isBorrowedBy(userId)) {
+			return RentalDetailResponse.of(rental, ActorType.BORROWER);
+		}
+		throw new RentalException(RentalErrorCode.RENTAL_ACCESS_DENIED);
 	}
 
 	/** 신청 객체를 만들고 날짜 규칙까지 검증한다. 신청과 비용 확인이 같이 쓴다. */

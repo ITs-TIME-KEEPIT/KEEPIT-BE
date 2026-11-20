@@ -21,6 +21,9 @@ public class SecurityConfig {
 			"/v3/api-docs/**",
 			"/actuator/health",
 			"/api/auth/**",
+			// [로그인 전 임시] UT는 로그인 없이 고정 사용자 id로 돌린다 (11/10 회의 결정).
+			// 카카오 로그인이 붙으면 이 줄을 지운다.
+			"/api/v1/**",
 	};
 
 	private final JwtTokenProvider jwtTokenProvider;
