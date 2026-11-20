@@ -165,6 +165,35 @@ class KakaoFlowIntegrationTest {
 	}
 
 	@Test
+	void protectedRouteRequiresActiveCompletedUserAndAccessToken() throws Exception {
+		String path = "/api/v1/clothes";
+		mvc.perform(get(path)).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("GLOBAL_401"));
+		User user = users.saveAndFlush(User.builder().kakaoId("24120").build());
+		String signup = members.login("24120").signupToken();
+		mvc.perform(get(path).header("Authorization", "Bearer " + signup))
+				.andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("AUTH_403_2"));
+		String access = "Bearer " + jwt.createAccessToken(user.getId(), "USER");
+		mvc.perform(get(path).header("Authorization", access)).andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.code").value("AUTH_403_2"));
+		jdbc.update("UPDATE users SET nickname='회원',phone='01012345678' WHERE id=?", user.getId());
+		mvc.perform(get(path).header("Authorization", access)).andExpect(status().isOk());
+		jdbc.update("UPDATE users SET status='SUSPENDED' WHERE id=?", user.getId());
+		mvc.perform(get(path).header("Authorization", access)).andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.code").value("AUTH_403_1"));
+		mvc.perform(get(path).header("Authorization", "Bearer " + jwt.createRefreshToken(user.getId())))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void profileRequiresSignupCredential() throws Exception {
+		User user = users.saveAndFlush(User.builder().kakaoId("24121").build());
+		mvc.perform(multipart(PROFILE)).andExpect(status().isUnauthorized());
+		mvc.perform(multipart(PROFILE).header("Authorization", "Bearer " + jwt.createAccessToken(user.getId(), "USER")))
+				.andExpect(status().isUnauthorized());
+		mvc.perform(get("/api/v1/auth/unknown")).andExpect(status().isUnauthorized());
+	}
+
+	@Test
 	void callbackRejectsMissingBrowserStateAndHandlesCancellation() throws Exception {
 		mvc.perform(get("/api/v1/auth/kakao/callback").param("code", "123"))
 				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.success").value(false));

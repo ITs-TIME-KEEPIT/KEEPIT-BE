@@ -147,6 +147,22 @@ public class JwtTokenProvider {
 		return REFRESH_TYPE.equals(parseClaims(token).get(TYPE_CLAIM, String.class));
 	}
 
+	public record RequestIdentity(long memberId, boolean signup) {}
+
+	// 보호된 경로에서 쓸 토큰만 서명과 만료까지 한 번에 검증한다.
+	public java.util.Optional<RequestIdentity> readRequestIdentity(String token) {
+		try {
+			Claims claims = parseClaims(token);
+			String type = claims.get(TYPE_CLAIM, String.class);
+			if (!ACCESS_TYPE.equals(type) && !SIGNUP_TYPE.equals(type)) {
+				return java.util.Optional.empty();
+			}
+			return java.util.Optional.of(new RequestIdentity(Long.parseLong(claims.getSubject()), SIGNUP_TYPE.equals(type)));
+		} catch (JwtException | IllegalArgumentException exception) {
+			return java.util.Optional.empty();
+		}
+	}
+
 	public Authentication getAuthentication(String token) {
 		Claims claims = parseClaims(token);
 		Long memberId = Long.valueOf(claims.getSubject());
