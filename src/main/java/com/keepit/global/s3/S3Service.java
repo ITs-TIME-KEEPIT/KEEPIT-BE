@@ -18,7 +18,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 @Service
 @RequiredArgsConstructor
 @Profile("dev")
-public class S3Service {
+public class S3Service implements FileUploader {
 
 	private static final Duration DOWNLOAD_URL_DURATION = Duration.ofMinutes(10);
 
@@ -29,6 +29,7 @@ public class S3Service {
 	/**
 	 * 파일을 업로드하고 S3 object key를 반환한다.
 	 */
+	@Override
 	public String upload(MultipartFile file, String directory) {
 		String key = createKey(directory, file.getOriginalFilename());
 		PutObjectRequest request = PutObjectRequest.builder()
@@ -44,6 +45,7 @@ public class S3Service {
 		return key;
 	}
 
+	@Override
 	public String getUrl(String key) {
 		return s3Presigner.presignGetObject(request -> request
 						.signatureDuration(DOWNLOAD_URL_DURATION)
@@ -52,6 +54,7 @@ public class S3Service {
 				.toString();
 	}
 
+	@Override
 	public void delete(String key) {
 		s3Client.deleteObject(DeleteObjectRequest.builder()
 				.bucket(s3Properties.bucket())
