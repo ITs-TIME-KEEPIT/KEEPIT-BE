@@ -2,6 +2,8 @@ package com.keepit.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -31,10 +33,13 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.web.util.UriComponentsBuilder;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
-@SpringBootTest(properties = "kakao.redirect-uri=https://keepit.test/api/v1/auth/kakao/callback")
+@SpringBootTest(properties = {"kakao.client-id=test-client", "kakao.redirect-uri=https://keepit.test/api/v1/auth/kakao/callback"})
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Import(TestcontainersConfiguration.class)
@@ -46,16 +51,20 @@ class KakaoFlowIntegrationTest {
 	@Autowired RefreshTokenRepository tokens;
 	@Autowired JdbcTemplate jdbc;
 	@Autowired KakaoMemberService members;
-	@MockitoBean KakaoOAuthClient kakao;
+	@MockitoSpyBean KakaoOAuthClient kakao;
+	@Autowired JsonMapper json;
 	@MockitoBean FileUploader uploader;
 
 	private ResultActions callback(long kakaoId) throws Exception {
 		String code = "code-" + kakaoId;
-		when(kakao.getToken(code)).thenReturn(new KakaoTokenResponse("bearer", code, 100, null, null, null));
-		when(kakao.getUserInfo(code)).thenReturn(new KakaoUserInfoResponse(kakaoId, null));
-		String state = jwt.createOAuthState();
+		doReturn(new KakaoTokenResponse("bearer", code, 100, null, null, null)).when(kakao).getToken(code);
+		doReturn(new KakaoUserInfoResponse(kakaoId, null)).when(kakao).getUserInfo(code);
+		var redirect = mvc.perform(get("/api/v1/auth/kakao/login")).andExpect(status().isFound()).andReturn().getResponse();
+		String state = UriComponentsBuilder.fromUriString(redirect.getHeader("Location")).build().getQueryParams().getFirst("state");
+		Cookie stateCookie = redirect.getCookie("keepit_kakao_state");
+		assertThat(stateCookie).isNotNull();
 		return mvc.perform(get("/api/v1/auth/kakao/callback").param("state", state).param("code", code)
-				.cookie(new Cookie("keepit_kakao_state", state)));
+				.cookie(stateCookie));
 	}
 
 	@Test
@@ -100,7 +109,7 @@ class KakaoFlowIntegrationTest {
 
 	@Test
 	void upstreamFailureProducesCommonErrorBeforeUserWrite() throws Exception {
-		when(kakao.getToken("network-failure")).thenThrow(new org.springframework.web.client.ResourceAccessException("timeout"));
+		doThrow(new org.springframework.web.client.ResourceAccessException("timeout")).when(kakao).getToken("network-failure");
 		String state = jwt.createOAuthState();
 		mvc.perform(get("/api/v1/auth/kakao/callback").param("state", state).param("code", "network-failure")
 				.cookie(new Cookie("keepit_kakao_state", state))).andExpect(status().isBadGateway())
@@ -193,6 +202,54 @@ class KakaoFlowIntegrationTest {
 		mvc.perform(multipart(PROFILE).header("Authorization", "Bearer " + jwt.createAccessToken(user.getId(), "USER")))
 				.andExpect(status().isUnauthorized());
 		mvc.perform(get("/api/v1/auth/unknown")).andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void interruptedSignupCompletesOnceAndThirdLoginRotatesToken() throws Exception {
+		var first = callback(24130).andExpect(status().isOk()).andReturn().getResponse();
+		var firstData = json.readTree(first.getContentAsByteArray()).get("data");
+		assertThat(firstData.get("status").asString()).isEqualTo("PROFILE_REQUIRED");
+		long userId = jwt.getMemberId(firstData.get("signupToken").asString());
+
+		// 첫 앱 세션을 버리고 두 번째 로그인 응답만 사용한다.
+		var second = callback(24130).andExpect(status().isOk()).andReturn().getResponse();
+		String signup = json.readTree(second.getContentAsByteArray()).get("data").get("signupToken").asString();
+		assertThat(jwt.getMemberId(signup)).isEqualTo(userId);
+		var submitted = mvc.perform(multipart(PROFILE).header("Authorization", "Bearer " + signup)
+				.param("nickname", "완료회원").param("phone", "01012345678"))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.userId").value(userId)).andReturn().getResponse();
+		String savedHash = tokens.findByUserId(userId).orElseThrow().getTokenHash();
+		String access = json.readTree(submitted.getContentAsByteArray()).get("data").get("accessToken").asString();
+		mvc.perform(get("/api/v1/clothes").header("Authorization", "Bearer " + access)).andExpect(status().isOk());
+
+		// 세 번째 콜백에서는 등록 화면 없이 일반 토큰을 받고 동일한 한 행을 회전한다.
+		callback(24130).andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("AUTHENTICATED"))
+				.andExpect(jsonPath("$.data.userId").value(userId));
+		assertThat(tokens.findByUserId(userId).orElseThrow().getTokenHash()).isNotEqualTo(savedHash);
+		assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM refresh_tokens WHERE user_id=?", Long.class, userId)).isOne();
+	}
+
+	@Test
+	void twoConcurrentProfileSubmissionsHaveOnlyOneWinner() throws Exception {
+		String signup = members.login("24131").signupToken();
+		var gate = new CountDownLatch(1);
+		var pool = Executors.newFixedThreadPool(2);
+		java.util.concurrent.Callable<Integer> submit = () -> {
+			gate.await();
+			return mvc.perform(multipart(PROFILE).header("Authorization", "Bearer " + signup)
+					.param("nickname", "동시제출").param("phone", "01012345678")).andReturn().getResponse().getStatus();
+		};
+		try {
+			var a = pool.submit(submit);
+			var b = pool.submit(submit);
+			gate.countDown();
+			assertThat(java.util.List.of(a.get(30, TimeUnit.SECONDS), b.get(30, TimeUnit.SECONDS)))
+					.containsExactlyInAnyOrder(200, 409);
+		} finally {
+			pool.shutdownNow();
+		}
+		assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM refresh_tokens WHERE user_id=?", Long.class,
+				jwt.getMemberId(signup))).isOne();
 	}
 
 	@Test
