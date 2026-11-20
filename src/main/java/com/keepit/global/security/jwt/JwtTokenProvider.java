@@ -27,6 +27,8 @@ public class JwtTokenProvider {
 	private static final String ACCESS_TYPE = "access";
 	private static final String REFRESH_TYPE = "refresh";
 	private static final String SIGNUP_TYPE = "signup";
+	private static final String STATE_TYPE = "oauth_state";
+	public static final Duration STATE_LIFETIME = Duration.ofMinutes(5);
 	private static final Duration SIGNUP_LIFETIME = Duration.ofMinutes(10);
 	private static final int MIN_SECRET_BYTES = 32;
 
@@ -79,6 +81,26 @@ public class JwtTokenProvider {
 				.expiration(Date.from(now.toInstant().plus(SIGNUP_LIFETIME)))
 				.signWith(secretKey)
 				.compact();
+	}
+
+	// 서버가 서명한 무작위 상태값으로 같은 브라우저에서 시작한 인가 흐름을 식별한다.
+	public String createOAuthState() {
+		Date now = new Date();
+		return Jwts.builder()
+				.id(UUID.randomUUID().toString())
+				.claim(TYPE_CLAIM, STATE_TYPE)
+				.issuedAt(now)
+				.expiration(Date.from(now.toInstant().plus(STATE_LIFETIME)))
+				.signWith(secretKey)
+				.compact();
+	}
+
+	public boolean isOAuthState(String token) {
+		try {
+			return STATE_TYPE.equals(parseClaims(token).get(TYPE_CLAIM, String.class));
+		} catch (JwtException | IllegalArgumentException exception) {
+			return false;
+		}
 	}
 
 	public boolean isSignupToken(String token) {

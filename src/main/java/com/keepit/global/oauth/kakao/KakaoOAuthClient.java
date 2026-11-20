@@ -2,6 +2,7 @@ package com.keepit.global.oauth.kakao;
 
 import com.keepit.global.oauth.kakao.dto.KakaoTokenResponse;
 import com.keepit.global.oauth.kakao.dto.KakaoUserInfoResponse;
+import java.net.URI;
 import java.time.Duration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -11,6 +12,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * 카카오 로그인 (REST API) 클라이언트.
@@ -34,6 +36,16 @@ public class KakaoOAuthClient {
 		requestFactory.setConnectTimeout(CONNECT_TIMEOUT);
 		requestFactory.setReadTimeout(READ_TIMEOUT);
 		this.restClient = RestClient.builder().requestFactory(requestFactory).build();
+	}
+
+	// 로그인 시작과 토큰 교환에서 같은 앱 키·콜백 경로를 사용한다.
+	public URI authorizeUri(String state) {
+		return UriComponentsBuilder.fromUriString("https://kauth.kakao.com/oauth/authorize")
+				.queryParam("response_type", "code")
+				.queryParam("client_id", "{clientId}")
+				.queryParam("redirect_uri", "{redirectUri}")
+				.queryParam("state", "{state}")
+				.encode().buildAndExpand(kakaoProperties.clientId(), kakaoProperties.redirectUri(), state).toUri();
 	}
 
 	public KakaoTokenResponse getToken(String authorizationCode) {
