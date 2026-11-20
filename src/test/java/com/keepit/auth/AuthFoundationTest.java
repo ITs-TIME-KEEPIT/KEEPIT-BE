@@ -35,7 +35,7 @@ class AuthFoundationTest {
 		User user = users.saveAndFlush(User.builder().kakaoId("pending").build());
 		assertThat(users.findByKakaoId("pending")).contains(user);
 		assertThat(user.isProfileComplete()).isFalse();
-		String token = jwt.createSignupToken(user.getId());
+		String token = jwt.createSignupToken(user.getId(), user.registrationContext());
 		assertThat(jwt.isSignupToken(token)).isTrue();
 		assertThat(jwt.getMemberId(token)).isEqualTo(user.getId());
 		assertThat(jwt.isAccessToken(token)).isFalse();

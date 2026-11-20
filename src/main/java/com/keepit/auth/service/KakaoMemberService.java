@@ -30,7 +30,7 @@ public class KakaoMemberService {
 			throw new BaseException(AuthErrorCode.SUSPENDED);
 		}
 		if (user.getStatus() == UserStatus.DELETED || !user.isProfileComplete()) {
-			return LoginResult.profileRequired(jwt.createSignupToken(user.getId()));
+			return LoginResult.profileRequired(jwt.createSignupToken(user.getId(), user.registrationContext()));
 		}
 
 		// 완성된 프로필만 일반 로그인으로 처리한다.

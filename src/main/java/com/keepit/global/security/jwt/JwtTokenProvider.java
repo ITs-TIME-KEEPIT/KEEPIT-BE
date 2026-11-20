@@ -72,11 +72,12 @@ public class JwtTokenProvider {
 	}
 
 	// 프로필 등록용 자격은 회원 ID와 용도만 담아 짧게 유지한다.
-	public String createSignupToken(Long memberId) {
+	public String createSignupToken(Long memberId, String registration) {
 		Date now = new Date();
 		return Jwts.builder()
 				.subject(String.valueOf(memberId))
 				.claim(TYPE_CLAIM, SIGNUP_TYPE)
+				.claim("registration", registration)
 				.issuedAt(now)
 				.expiration(Date.from(now.toInstant().plus(SIGNUP_LIFETIME)))
 				.signWith(secretKey)
@@ -100,6 +101,22 @@ public class JwtTokenProvider {
 			return STATE_TYPE.equals(parseClaims(token).get(TYPE_CLAIM, String.class));
 		} catch (JwtException | IllegalArgumentException exception) {
 			return false;
+		}
+	}
+
+	public record SignupIdentity(long memberId, String registration) {}
+
+	// 서명·만료·용도를 단일 파싱으로 검증한다.
+	public java.util.Optional<SignupIdentity> readSignupIdentity(String token) {
+		try {
+			Claims claims = parseClaims(token);
+			if (!SIGNUP_TYPE.equals(claims.get(TYPE_CLAIM, String.class))) {
+				return java.util.Optional.empty();
+			}
+			return java.util.Optional.of(new SignupIdentity(Long.parseLong(claims.getSubject()),
+					claims.get("registration", String.class)));
+		} catch (JwtException | IllegalArgumentException exception) {
+			return java.util.Optional.empty();
 		}
 	}
 
