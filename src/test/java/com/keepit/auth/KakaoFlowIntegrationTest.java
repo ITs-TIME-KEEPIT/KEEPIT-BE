@@ -125,6 +125,19 @@ class KakaoFlowIntegrationTest {
 	}
 
 	@Test
+	void emptyBrowserFileInputIsOptionalButNamedEmptyFileIsRejected() throws Exception {
+		String token = "Bearer " + members.login("24115").signupToken();
+		var damaged = new MockMultipartFile("profileImage", "empty.jpg", "image/jpeg", new byte[0]);
+		mvc.perform(multipart(PROFILE).file(damaged).header("Authorization", token)
+				.param("nickname", "닉네임").param("phone", "01012345678"))
+				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("IMAGE_400_1"));
+		var noSelection = new MockMultipartFile("profileImage", "", "application/octet-stream", new byte[0]);
+		mvc.perform(multipart(PROFILE).file(noSelection).header("Authorization", token)
+				.param("nickname", "닉네임").param("phone", "01012345678"))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("AUTHENTICATED"));
+	}
+
+	@Test
 	void signupCredentialCanOnlyFinishTheSameRegistration() throws Exception {
 		User user = users.saveAndFlush(User.builder().kakaoId("24111").build());
 		String old = members.login("24111").signupToken();

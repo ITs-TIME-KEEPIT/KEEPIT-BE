@@ -11,6 +11,7 @@ import com.keepit.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
@@ -46,7 +47,8 @@ public class ProfileRegistrationService {
 		}
 
 		// 사진은 선택이며, 프로필 갱신과 토큰 해시 저장을 함께 커밋한다.
-		String key = image == null ? null : storage.store(image, "profiles");
+		boolean hasImage = image != null && (!image.isEmpty() || StringUtils.hasLength(image.getOriginalFilename()));
+		String key = hasImage ? storage.store(image, "profiles") : null;
 		user.completeProfile(cleanNickname, cleanPhone, key);
 		return LoginResult.authenticated(user.getId(), tokens.issue(user));
 	}
