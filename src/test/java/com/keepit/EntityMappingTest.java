@@ -76,7 +76,7 @@ class EntityMappingTest {
 	void setUp() {
 		owner = em.persist(user("kakao-owner", "소유자"));
 		borrower = em.persist(user("kakao-borrower", "대여자"));
-		Region region = em.persist(Region.builder().sido("서울").sigungu("마포구").open(true).build());
+		Region region = em.persist(Region.builder().sido("테스트").sigungu("테스트구").open(true).build());
 		clothing = em.persist(Clothing.builder()
 				.owner(owner)
 				.region(region)
@@ -208,7 +208,7 @@ class EntityMappingTest {
 		em.flush();
 
 		assertThatThrownBy(() -> em.persistAndFlush(
-				Region.builder().sido("서울").sigungu("마포구").open(false).build()))
+				Region.builder().sido("테스트").sigungu("테스트구").open(false).build()))
 				.isInstanceOf(PersistenceException.class);
 	}
 

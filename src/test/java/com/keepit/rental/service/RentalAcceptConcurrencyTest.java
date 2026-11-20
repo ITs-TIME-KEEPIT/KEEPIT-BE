@@ -70,7 +70,7 @@ class RentalAcceptConcurrencyTest {
 			User owner = User.builder().kakaoId("k-owner").nickname("주인").build();
 			User first = User.builder().kakaoId("k-first").nickname("대여자1").build();
 			User second = User.builder().kakaoId("k-second").nickname("대여자2").build();
-			Region region = Region.builder().sido("서울").sigungu("마포구").open(true).build();
+			Region region = Region.builder().sido("테스트").sigungu("테스트구").open(true).build();
 			em.persist(owner);
 			em.persist(first);
 			em.persist(second);
