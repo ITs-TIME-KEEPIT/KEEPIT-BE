@@ -2,3 +2,4 @@
 *.bat text eol=crlf
 *.jar binary
 /.githooks/* text eol=lf
+/infra/**/*.sh text eol=lf

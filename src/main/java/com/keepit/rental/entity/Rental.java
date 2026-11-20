@@ -44,6 +44,9 @@ public class Rental extends BaseTimeEntity {
 	/** 신청 후 옷 주인이 응답해야 하는 기한 (RENT-440). */
 	public static final Duration RESPONSE_DEADLINE = Duration.ofHours(48);
 
+	/** 거래 완료 후 서로의 연락처가 보이는 기간 (TRD-540). */
+	public static final Duration CONTACT_VISIBLE_AFTER_COMPLETE = Duration.ofDays(7);
+
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
@@ -248,6 +251,43 @@ public class Rental extends BaseTimeEntity {
 		requireStatus(RentalStatus.REQUESTED);
 		this.canceledBy = ActorType.BORROWER;
 		return changeStatus(RentalStatus.CANCELED, ActorType.BORROWER, borrower, null);
+	}
+
+	/**
+	 * 옷 주인이 옷을 넘겼다고 표시한다 (TRD-510).
+	 * 전달 사진 확인은 체크포인트 사진 기능이 들어올 때 추가한다.
+	 */
+	public RentalStatusLog handOver(LocalDateTime now) {
+		requireStatus(RentalStatus.ACCEPTED);
+		this.handedOverAt = now;
+		return changeStatus(RentalStatus.HANDED_OVER, ActorType.OWNER, owner, null);
+	}
+
+	/** 대여자가 옷을 받았다고 확인한다 (TRD-520). */
+	public RentalStatusLog receive(LocalDateTime now) {
+		requireStatus(RentalStatus.HANDED_OVER);
+		this.receivedAt = now;
+		return changeStatus(RentalStatus.RECEIVED, ActorType.BORROWER, borrower, null);
+	}
+
+	/** 대여자가 옷을 돌려준다 (TRD-530). return은 예약어라 메서드 이름을 returnItem으로 둔다. */
+	public RentalStatusLog returnItem(LocalDateTime now) {
+		requireStatus(RentalStatus.RECEIVED);
+		this.returnedAt = now;
+		return changeStatus(RentalStatus.RETURNED, ActorType.BORROWER, borrower, null);
+	}
+
+	/** 옷 주인이 돌려받은 옷을 확인하고 거래를 끝낸다 (TRD-540). 연락처는 완료 7일 뒤 다시 숨긴다. */
+	public RentalStatusLog complete(LocalDateTime now) {
+		requireStatus(RentalStatus.RETURNED);
+		this.completedAt = now;
+		this.phoneHiddenAt = now.plus(CONTACT_VISIBLE_AFTER_COMPLETE);
+		return changeStatus(RentalStatus.COMPLETED, ActorType.OWNER, owner, null);
+	}
+
+	/** 지금 상태에서 다음에 할 일과 그 주체 (TRD-501). */
+	public RentalNextAction nextAction() {
+		return RentalNextAction.of(status);
 	}
 
 	/** 기간이 겹치는 다른 신청이 수락되어 이 신청이 무효가 된다. */

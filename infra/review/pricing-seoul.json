@@ -1,0 +1,74 @@
+[
+  {
+    "Item": "EC2 t3.micro",
+    "USD": "0.0130000000",
+    "Unit": "Hrs",
+    "Begin": "0",
+    "End": "Inf",
+    "Description": "$0.013 per On Demand Linux t3.micro Instance Hour",
+    "SKU": "NYVHMS44MY8N2F3M"
+  },
+  {
+    "Item": "RDS db.t4g.micro",
+    "USD": "0.0250000000",
+    "Unit": "Hrs",
+    "Begin": "0",
+    "End": "Inf",
+    "Description": "$ 0.025 per RDS db.t4g.micro Single-AZ instance hour (or partial hour) running MySQL",
+    "SKU": "EGDA3CNQ6SHE4SUT"
+  },
+  {
+    "Item": "RDS db.t4g.micro",
+    "USD": "0.0250000000",
+    "Unit": "Hrs",
+    "Begin": "0",
+    "End": "Inf",
+    "Description": "$ 0.025 per RDS db.t4g.micro Single-AZ unused capacity reservation hour (or partial hour) for MySQL",
+    "SKU": "ZYU2M3CUB6TCPRB6"
+  },
+  {
+    "Item": "RDS gp3",
+    "USD": "0.1310000000",
+    "Unit": "GB-Mo",
+    "Begin": "0",
+    "End": "Inf",
+    "Description": "$0.131 per GB-month of provisioned GP3 storage running MySQL",
+    "SKU": "HN5UJMXZCYTYFCUG"
+  },
+  {
+    "Item": "EBS gp3",
+    "USD": "0.0912000000",
+    "Unit": "GB-Mo",
+    "Begin": "0",
+    "End": "Inf",
+    "Description": "$0.0912 per GB-month of General Purpose (gp3) provisioned storage - Asia Pacific (Seoul)",
+    "SKU": "MTK7D9SGKGYR3JD6"
+  },
+  {
+    "Item": "S3 Standard",
+    "USD": "0.0240000000",
+    "Unit": "GB-Mo",
+    "Begin": "51200",
+    "End": "512000",
+    "Description": "$0.024 per GB - next 450 TB / month of storage used",
+    "SKU": "3JSN7K7UDDNCYCDM"
+  },
+  {
+    "Item": "S3 Standard",
+    "USD": "0.0250000000",
+    "Unit": "GB-Mo",
+    "Begin": "0",
+    "End": "51200",
+    "Description": "$0.025 per GB - first 50 TB / month of storage used",
+    "SKU": "3JSN7K7UDDNCYCDM"
+  },
+  {
+    "Item": "S3 Standard",
+    "USD": "0.0230000000",
+    "Unit": "GB-Mo",
+    "Begin": "512000",
+    "End": "Inf",
+    "Description": "$0.023 per GB - storage used / month over 500 TB",
+    "SKU": "3JSN7K7UDDNCYCDM"
+  }
+]

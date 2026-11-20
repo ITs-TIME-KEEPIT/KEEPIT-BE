@@ -12,7 +12,7 @@
 | Auth | Spring Security + JWT (jjwt 0.13), Kakao Login |
 | API Docs | springdoc-openapi 3.x (Swagger UI) |
 | File Storage | AWS S3 (AWS SDK for Java v2) — 보류, 코드 주석 처리 |
-| Infra | Nginx, Docker, Docker Compose (AWS EC2 / RDS / S3는 보류) |
+| Infra | Docker, Docker Compose, 개발용 AWS EC2 / RDS / S3 / ECR |
 | CI/CD | GitHub Actions |
 | Code Review | CodeRabbit |
 | P1 (선택) | Redis, PG 결제, FCM |
@@ -63,17 +63,12 @@ src/main/resources
 └── db/migration             # Flyway 마이그레이션 (V1__xxx.sql)
 ```
 
-## AWS (보류)
+## AWS
 
-AWS 세팅(EC2 배포, RDS, S3)은 추후 진행합니다. 관련 코드는 `[AWS 보류]` 표시와 함께 주석 처리되어 있으며, 사용 시 아래를 주석 해제합니다.
+개발용 AWS 인프라와 ECR·SSM 자동 배포 구성은 [infra/README.md](infra/README.md)에 정리되어 있습니다. Terraform 적용과 서버 환경변수 준비 후 PR이 `develop`에 병합되면 GitHub Actions가 개발 EC2에 배포합니다.
+개발 EC2는 `docker-compose.dev.yml`과 `dev` 프로필을 사용합니다. `docker-compose.prod.yml`은 향후 운영 배포용이며 현재 자동 배포 트리거는 없습니다.
 
-- `build.gradle`: AWS SDK BOM / `software.amazon.awssdk:s3`
-- `application.yml`의 `aws:` 설정, `application-prod.yml`의 RDS datasource
-- `global/config/S3Config.java`, `global/s3/*`
-- `docs/deploy/cd.yml` (Docker Hub 푸시 → EC2 배포 초안, 활성화 시 `.github/workflows/`로 이동)
-- `.env.example`의 `DB_URL`, `AWS_*`
-
-CD 활성화 시 필요한 GitHub Secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `EC2_HOST`, `EC2_USERNAME`, `EC2_SSH_KEY`, `EC2_DEPLOY_PATH`
+개발 EC2의 `/opt/keepit/.env`에 RDS 연결 정보와 `AWS_REGION`, `AWS_S3_BUCKET`을 지정합니다. S3 인증에는 EC2 IAM 역할을 사용합니다.
 
 ## 협업 컨벤션
 
