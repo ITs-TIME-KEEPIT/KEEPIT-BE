@@ -1,11 +1,15 @@
 package com.keepit.global.security.jwt;
 
+import com.keepit.global.config.ClockConfig;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Date;
+import java.util.UUID;
 import java.util.List;
 import javax.crypto.SecretKey;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +26,8 @@ public class JwtTokenProvider {
 	private static final String TYPE_CLAIM = "type";
 	private static final String ACCESS_TYPE = "access";
 	private static final String REFRESH_TYPE = "refresh";
+	private static final String SIGNUP_TYPE = "signup";
+	private static final Duration SIGNUP_LIFETIME = Duration.ofMinutes(10);
 	private static final int MIN_SECRET_BYTES = 32;
 
 	private final SecretKey secretKey;
@@ -55,10 +61,33 @@ public class JwtTokenProvider {
 		return Jwts.builder()
 				.subject(String.valueOf(memberId))
 				.claim(TYPE_CLAIM, REFRESH_TYPE)
+				// 같은 초의 재로그인도 이전 리프레시 토큰과 구분한다.
+				.id(UUID.randomUUID().toString())
 				.issuedAt(now)
 				.expiration(new Date(now.getTime() + refreshTokenExpiration))
 				.signWith(secretKey)
 				.compact();
+	}
+
+	// 프로필 등록용 자격은 회원 ID와 용도만 담아 짧게 유지한다.
+	public String createSignupToken(Long memberId) {
+		Date now = new Date();
+		return Jwts.builder()
+				.subject(String.valueOf(memberId))
+				.claim(TYPE_CLAIM, SIGNUP_TYPE)
+				.issuedAt(now)
+				.expiration(Date.from(now.toInstant().plus(SIGNUP_LIFETIME)))
+				.signWith(secretKey)
+				.compact();
+	}
+
+	public boolean isSignupToken(String token) {
+		return SIGNUP_TYPE.equals(parseClaims(token).get(TYPE_CLAIM, String.class));
+	}
+
+	// JWT 자체의 만료 시각을 읽어 DB와 토큰의 유효 기간을 일치시킨다.
+	public LocalDateTime getExpiresAt(String token) {
+		return LocalDateTime.ofInstant(parseClaims(token).getExpiration().toInstant(), ClockConfig.SEOUL);
 	}
 
 	public boolean validateToken(String token) {

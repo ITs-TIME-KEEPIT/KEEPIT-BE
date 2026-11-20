@@ -33,7 +33,7 @@ public class User extends BaseTimeEntity {
 	@Column(name = "kakao_id", nullable = false, unique = true, length = 64)
 	private String kakaoId;
 
-	@Column(nullable = false, length = 20)
+	@Column(length = 20)
 	private String nickname;
 
 	@Column(name = "profile_image_key")
@@ -68,12 +68,18 @@ public class User extends BaseTimeEntity {
 	private LocalDateTime deletedAt;
 
 	@Builder
-	private User(String kakaoId, String nickname, String profileImageKey, UserRole role) {
+	private User(String kakaoId, String nickname, String phone, String profileImageKey, UserRole role) {
 		this.kakaoId = kakaoId;
 		this.nickname = nickname;
+		this.phone = phone;
 		this.profileImageKey = profileImageKey;
 		this.role = role == null ? UserRole.USER : role;
 		this.status = UserStatus.ACTIVE;
+	}
+
+	// 로그인·재로그인 모두 DB에 저장된 두 필수값으로 화면을 결정한다.
+	public boolean isProfileComplete() {
+		return nickname != null && !nickname.isBlank() && phone != null && !phone.isBlank();
 	}
 
 }
