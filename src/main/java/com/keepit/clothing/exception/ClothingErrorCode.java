@@ -24,7 +24,9 @@ public enum ClothingErrorCode implements BaseResponseCode {
 	INVALID_UNAVAILABLE_PERIOD("CLOTHING_400_9", HttpStatus.BAD_REQUEST, "대여 불가 기간이 올바르지 않습니다."),
 	DUPLICATE_IMAGE("CLOTHING_400_10", HttpStatus.BAD_REQUEST, "같은 사진을 중복해서 등록할 수 없습니다."),
 	UNUSABLE_IMAGE("CLOTHING_400_11", HttpStatus.BAD_REQUEST, "사용할 수 없는 사진이 포함되어 있습니다."),
-	REGION_NOT_SELECTABLE("CLOTHING_400_12", HttpStatus.BAD_REQUEST, "선택할 수 없는 지역입니다.");
+	REGION_NOT_SELECTABLE("CLOTHING_400_12", HttpStatus.BAD_REQUEST, "선택할 수 없는 지역입니다."),
+
+	CLOTHING_NOT_FOUND("CLOTHING_404_1", HttpStatus.NOT_FOUND, "옷을 찾을 수 없습니다.");
 
 	private final String code;
 	private final HttpStatus httpStatus;
