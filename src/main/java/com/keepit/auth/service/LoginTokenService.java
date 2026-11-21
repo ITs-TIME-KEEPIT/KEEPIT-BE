@@ -31,16 +31,24 @@ public class LoginTokenService {
 		}
 
 		// 리프레시 토큰 원문은 클라이언트에만 전달하고 DB에는 해시를 남긴다.
-		String access = jwt.createAccessToken(user.getId(), user.getRole().name(), user.getAuthGeneration());
 		String refresh = jwt.createRefreshToken(user.getId());
 		String hash = hash(refresh);
 		var expiresAt = jwt.getExpiresAt(refresh);
 
-		// 기존 행을 갱신하거나 첫 로그인에서만 새 행을 생성한다.
-		refreshTokens.findByUserId(user.getId()).ifPresentOrElse(
-				stored -> stored.rotate(hash, expiresAt),
-				() -> refreshTokens.save(RefreshToken.builder().user(user).tokenHash(hash).expiresAt(expiresAt).build()));
+		// 일반 재로그인은 같은 행을 유지해 다른 기기의 액세스 토큰이 만료될 때까지 유효하게 한다.
+		RefreshToken session = refreshTokens.findByUserId(user.getId()).orElse(null);
+		if (session == null) {
+			session = refreshTokens.save(RefreshToken.builder().user(user).tokenHash(hash).expiresAt(expiresAt).build());
+		} else {
+			session.rotate(hash, expiresAt);
+		}
+		String access = jwt.createAccessToken(user.getId(), user.getRole().name(), session.getId());
 		return new Tokens(access, refresh);
+	}
+
+	@Transactional(propagation = Propagation.MANDATORY)
+	public void endPreviousSession(Long userId) {
+		refreshTokens.deleteSession(userId);
 	}
 
 	private String hash(String token) {

@@ -34,9 +34,7 @@ jwt:
   refresh-token-expiration: ${JWT_REFRESH_EXPIRATION:1209600000}  # 14일 (ms)
 
 kakao:
-  client-id: ${KAKAO_CLIENT_ID:}
-  client-secret: ${KAKAO_CLIENT_SECRET:}
-  redirect-uri: ${KAKAO_REDIRECT_URI:}
+  app-id: ${KAKAO_APP_ID:1659627}
 
 springdoc:
   api-docs:

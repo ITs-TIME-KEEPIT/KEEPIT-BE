@@ -1,20 +1,34 @@
 # 카카오 로그인과 프로필 등록
 
+## 모바일 로그인
+
+앱이 카카오 모바일 SDK로 로그인한 뒤 발급받은 카카오 액세스 토큰을 HTTPS로 백엔드에 전달한다. 앱이 로그인을 취소하면 백엔드 요청을 보내지 않는다.
+
+```http
+POST /api/v1/auth/kakao/login
+Content-Type: application/json
+
+{"accessToken":"<카카오 SDK 액세스 토큰>"}
+```
+
+백엔드는 카카오 토큰 정보 API로 남은 유효 시간, 회원번호 및 발급 앱 ID를 확인한다. `KAKAO_APP_ID`는 카카오 디벨로퍼스에 표시되는 숫자 앱 ID이며 기본값은 1659627이다. 빈 토큰은 400, 만료·무효 토큰과 다른 앱의 토큰은 401, 카카오 응답 장애는 502로 처리한다.
+
 ## 화면 전환
 
 | 시점 | 응답 | 앱 동작 |
 |---|---|---|
-| 로그인 시작 | GET /api/v1/auth/kakao/login → 302 | 브라우저로 열고 같은 브라우저에서 콜백까지 진행 |
-| 콜백 성공 | 200, data.status = PROFILE_REQUIRED | signupToken을 등록에만 사용하고 프로필 생성 화면으로 이동 |
-| 콜백·프로필 완료 | 200, data.status = AUTHENTICATED | accessToken과 refreshToken을 보관하고 홈으로 이동 |
+| 로그인 성공 | 200, data.status = PROFILE_REQUIRED | signupToken을 등록에만 사용하고 프로필 생성 화면으로 이동 |
+| 로그인·프로필 완료 | 200, data.status = AUTHENTICATED | accessToken과 refreshToken을 보관하고 홈으로 이동 |
 | 보호된 API 호출 | 403, code = AUTH_403_2 | 프로필 화면으로 이동. 등록 토큰이 없거나 만료됐으면 카카오 로그인부터 재개 |
 | 보호된 API 호출 | 403, code = AUTH_403_1 | 정지 안내 |
 | 보호된 API 호출 | 401, code = GLOBAL_401 | 유효한 자격을 확보하도록 로그인 재개. 다른 기기에서 등록을 마친 후 기존 등록 토큰을 사용한 경우도 포함 |
 
-앱 시작·복귀·딥링크 진입 시에도 같은 규칙을 적용한다. 프로필 입력 중 앱을 닫아도 다음 카카오 로그인은 동일한 회원을 찾아 PROFILE_REQUIRED를 반환한다. 콜백은 브라우저에 공통 JSON 응답을 반환한다. 외부 브라우저에서 네이티브 앱으로 인증 결과를 인계하는 방식은 클라이언트와 별도로 합의해야 한다.
+앱 시작·복귀·딥링크 진입 시에도 같은 규칙을 적용한다. 프로필 입력 중 앱을 닫아도 다음 카카오 로그인은 동일한 회원을 찾아 PROFILE_REQUIRED를 반환한다. 앱이 받은 로그인 응답의 data.status로 이동할 화면을 결정한다.
 
 ## 프로필 제출
 
-POST /api/v1/auth/kakao/profile은 Authorization 헤더에 Bearer signupToken을 받고 multipart/form-data를 사용한다. nickname과 phone은 공백을 제거한 후 각각 1~20자여야 한다. profileImage는 선택이며 JPEG·PNG 파일을 받을 수 있다. 앱은 400에서 입력을 수정하고, 401에서 로그인을 재개한다. 409는 이미 프로필 등록이 끝난 경우이므로 다시 로그인하여 일반 토큰을 받는다.
+앱은 `POST /api/v1/users/profile`에 `multipart/form-data`로 프로필을 제출한다. 요청 헤더에 `Authorization: Bearer <signupToken>`을 보낸다. nickname은 유니코드 문자·결합문자·숫자, ASCII 공백, 점(.), 밑줄(_), 하이픈(-), 가운뎃점(·), 아포스트로피(' 또는 ’)를 허용한다. 앞뒤 공백을 제거하며 빈 닉네임은 거부한다. 별도 글자 수 제한은 없다. phone은 입력한 원문이 ASCII 숫자 1~20자리여야 한다. profileImage는 선택이며 JPEG·PNG 파일을 받을 수 있다. 앱은 400에서 입력을 수정하고, 401에서 로그인을 재개한다. 409는 이미 프로필 등록이 끝난 경우이므로 다시 로그인하여 일반 토큰을 받는다.
+
+이전 형식의 액세스 토큰을 쓰던 앱은 401 응답 시 카카오 로그인을 한 번 다시 진행한다. 일반 재로그인은 다른 기기의 액세스 토큰 유효 기간을 유지하며, 탈퇴 후 재가입하면 이전 기기의 액세스 토큰은 무효화된다.
 
 토큰을 포함한 성공 응답은 캐시하지 않는다. 프로필 완료 전에는 일반 로그인 토큰을 발급하지 않는다.

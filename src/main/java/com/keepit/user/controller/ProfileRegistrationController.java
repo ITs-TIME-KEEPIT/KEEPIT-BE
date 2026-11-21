@@ -1,8 +1,9 @@
-package com.keepit.auth.controller;
+package com.keepit.user.controller;
 
 import com.keepit.auth.dto.LoginResult;
-import com.keepit.auth.service.ProfileRegistrationService;
 import com.keepit.global.response.SuccessResponse;
+import com.keepit.user.controller.docs.UserProfileApiDocs;
+import com.keepit.user.service.ProfileRegistrationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
@@ -16,11 +17,12 @@ import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequiredArgsConstructor
-public class ProfileRegistrationController {
+public class ProfileRegistrationController implements UserProfileApiDocs {
 
 	private final ProfileRegistrationService registration;
 
-	@PostMapping(value = "/api/v1/auth/kakao/profile", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+	@PostMapping(value = "/api/v1/users/profile", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+	@Override
 	public ResponseEntity<SuccessResponse<LoginResult>> register(
 			@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
 			@RequestParam(required = false) String nickname, @RequestParam(required = false) String phone,

@@ -27,8 +27,6 @@ public class JwtTokenProvider {
 	private static final String ACCESS_TYPE = "access";
 	private static final String REFRESH_TYPE = "refresh";
 	private static final String SIGNUP_TYPE = "signup";
-	private static final String STATE_TYPE = "oauth_state";
-	public static final Duration STATE_LIFETIME = Duration.ofMinutes(5);
 	private static final Duration SIGNUP_LIFETIME = Duration.ofMinutes(10);
 	private static final int MIN_SECRET_BYTES = 32;
 
@@ -46,16 +44,12 @@ public class JwtTokenProvider {
 		this.refreshTokenExpiration = jwtProperties.refreshTokenExpiration();
 	}
 
-	public String createAccessToken(Long memberId, String role) {
-		return createAccessToken(memberId, role, 0);
-	}
-
-	public String createAccessToken(Long memberId, String role, long generation) {
+	public String createAccessToken(Long memberId, String role, long sessionId) {
 		Date now = new Date();
 		return Jwts.builder()
 				.subject(String.valueOf(memberId))
 				.claim(TYPE_CLAIM, ACCESS_TYPE)
-				.claim("generation", generation)
+				.claim("sid", sessionId)
 				.claim(ROLE_CLAIM, role)
 				.issuedAt(now)
 				.expiration(new Date(now.getTime() + accessTokenExpiration))
@@ -87,26 +81,6 @@ public class JwtTokenProvider {
 				.expiration(Date.from(now.toInstant().plus(SIGNUP_LIFETIME)))
 				.signWith(secretKey)
 				.compact();
-	}
-
-	// 서버가 서명한 무작위 상태값으로 같은 브라우저에서 시작한 인가 흐름을 식별한다.
-	public String createOAuthState() {
-		Date now = new Date();
-		return Jwts.builder()
-				.id(UUID.randomUUID().toString())
-				.claim(TYPE_CLAIM, STATE_TYPE)
-				.issuedAt(now)
-				.expiration(Date.from(now.toInstant().plus(STATE_LIFETIME)))
-				.signWith(secretKey)
-				.compact();
-	}
-
-	public boolean isOAuthState(String token) {
-		try {
-			return STATE_TYPE.equals(parseClaims(token).get(TYPE_CLAIM, String.class));
-		} catch (JwtException | IllegalArgumentException exception) {
-			return false;
-		}
 	}
 
 	public record SignupIdentity(long memberId, String registration) {}
@@ -152,7 +126,7 @@ public class JwtTokenProvider {
 		return REFRESH_TYPE.equals(parseClaims(token).get(TYPE_CLAIM, String.class));
 	}
 
-	public record RequestIdentity(long memberId, boolean signup, long generation) {}
+	public record RequestIdentity(long memberId, boolean signup, Long sessionId) {}
 
 	// 보호된 경로에서 쓸 토큰만 서명과 만료까지 한 번에 검증한다.
 	public java.util.Optional<RequestIdentity> readRequestIdentity(String token) {
@@ -162,10 +136,8 @@ public class JwtTokenProvider {
 			if (!ACCESS_TYPE.equals(type) && !SIGNUP_TYPE.equals(type)) {
 				return java.util.Optional.empty();
 			}
-			// 이전 버전의 토큰은 최초 가입 세대(0)에서 만료 시점까지 사용할 수 있다.
-			Long generation = claims.get("generation", Long.class);
 			return java.util.Optional.of(new RequestIdentity(Long.parseLong(claims.getSubject()), SIGNUP_TYPE.equals(type),
-					generation == null ? 0 : generation));
+					claims.get("sid", Long.class)));
 		} catch (JwtException | IllegalArgumentException exception) {
 			return java.util.Optional.empty();
 		}

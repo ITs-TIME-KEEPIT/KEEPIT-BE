@@ -4,9 +4,10 @@ import com.keepit.auth.dto.LoginResult;
 import com.keepit.auth.exception.AuthErrorCode;
 import com.keepit.global.exception.BaseException;
 import com.keepit.global.oauth.kakao.KakaoOAuthClient;
+import com.keepit.global.oauth.kakao.KakaoProperties;
+import com.keepit.global.oauth.kakao.dto.KakaoTokenInfo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 
@@ -15,29 +16,31 @@ import org.springframework.web.client.RestClientException;
 public class KakaoLoginService {
 
 	private final KakaoOAuthClient kakao;
+	private final KakaoProperties properties;
 	private final KakaoMemberService members;
 
-	public LoginResult login(String code) {
-		// 토큰 교환과 회원번호 확인을 마친 후에만 DB 트랜잭션을 시작한다.
-		Long kakaoId;
+	public LoginResult login(String accessToken) {
+		if (accessToken == null || accessToken.isBlank() || accessToken.chars().anyMatch(c -> c <= 32 || c >= 127)) {
+			throw new BaseException(AuthErrorCode.INVALID_KAKAO_TOKEN_INPUT);
+		}
+		KakaoTokenInfo info;
 		try {
-			var token = kakao.getToken(code);
-			if (token == null || !StringUtils.hasText(token.accessToken())) {
-				throw new BaseException(AuthErrorCode.KAKAO_UNAVAILABLE);
-			}
-			var info = kakao.getUserInfo(token.accessToken());
-			if (info == null || info.id() == null || info.id() <= 0) {
-				throw new BaseException(AuthErrorCode.KAKAO_UNAVAILABLE);
-			}
-			kakaoId = info.id();
-		} catch (HttpClientErrorException exception) {
-			// 카카오의 응답 본문에는 민감 정보가 포함될 수 있어 도메인 오류로만 전달한다.
-			throw new BaseException(exception.getStatusCode().value() == 429
-					? AuthErrorCode.KAKAO_UNAVAILABLE : AuthErrorCode.KAKAO_AUTH_FAILED);
-		} catch (RestClientException exception) {
+			info = kakao.getTokenInfo(accessToken);
+		} catch (HttpClientErrorException error) {
+			int status = error.getStatusCode().value();
+			throw new BaseException(status == 400 || status == 401 || status == 403
+					? AuthErrorCode.KAKAO_AUTH_FAILED : AuthErrorCode.KAKAO_UNAVAILABLE);
+		} catch (RestClientException error) {
 			throw new BaseException(AuthErrorCode.KAKAO_UNAVAILABLE);
 		}
-		return members.login(kakaoId.toString());
-	}
 
+		// 카카오가 확인한 앱과 회원만 신뢰하고 검증 완료 후에 회원 트랜잭션을 시작한다.
+		if (info == null || info.appId() == null || info.id() == null || info.id() <= 0 || info.expiresIn() == null) {
+			throw new BaseException(AuthErrorCode.KAKAO_UNAVAILABLE);
+		}
+		if (info.appId() != properties.appId() || info.expiresIn() <= 0) {
+			throw new BaseException(AuthErrorCode.KAKAO_AUTH_FAILED);
+		}
+		return members.login(info.id().toString());
+	}
 }

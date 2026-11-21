@@ -23,9 +23,8 @@ public class SecurityConfig {
 	private static final PathPatternRequestMatcher.Builder PATHS = PathPatternRequestMatcher.withDefaults();
 	// 프로필 API는 등록 토큰을 서비스에서 검사하므로 일반 액세스 인증 경로와 분리한다.
 	private static final RequestMatcher PUBLIC_OR_REGISTRATION = new OrRequestMatcher(
-			PATHS.matcher(HttpMethod.GET, "/api/v1/auth/kakao/login"),
-			PATHS.matcher(HttpMethod.GET, "/api/v1/auth/kakao/callback"),
-			PATHS.matcher(HttpMethod.POST, "/api/v1/auth/kakao/profile"),
+			PATHS.matcher(HttpMethod.POST, "/api/v1/auth/kakao/login"),
+			PATHS.matcher(HttpMethod.POST, "/api/v1/users/profile"),
 			PATHS.matcher("/swagger-ui.html"), PATHS.matcher("/swagger-ui/**"),
 			PATHS.matcher("/v3/api-docs/**"), PATHS.matcher("/actuator/health"));
 

@@ -1,6 +1,8 @@
 package com.keepit.user.repository;
 
 import com.keepit.user.entity.User;
+import com.keepit.user.entity.UserRole;
+import com.keepit.user.entity.UserStatus;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import jakarta.persistence.LockModeType;
@@ -24,6 +26,31 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select u from User u where u.id = :id")
 	Optional<User> lockById(@Param("id") Long id);
+
+	// 필터에 필요한 값만 전달하여 긴 프로필 닉네임을 매 요청마다 로딩하지 않는다.
+	interface AccountSession {
+		Long getMemberId();
+		UserRole getRole();
+		UserStatus getStatus();
+		Long getSessionId();
+		int getProfileComplete();
+	}
+
+	// MySQL ICU의 공백 집합을 Java String.isBlank의 Character.isWhitespace와 맞춘다.
+	String NON_BLANK = "[^\\u0009-\\u000D\\u001C-\\u0020\\u1680\\u2000-\\u2006\\u2008-\\u200A\\u2028\\u2029\\u205F\\u3000]";
+
+	default Optional<AccountSession> findAccountSession(long id) {
+		return selectAccountSession(id, NON_BLANK);
+	}
+
+	@Query(value = """
+			select u.id as memberId, u.role as role, u.status as status, t.id as sessionId,
+			       case when regexp_like(u.nickname, :nonBlank) and regexp_like(u.phone, :nonBlank)
+			            then 1 else 0 end as profileComplete
+			from users u left join refresh_tokens t on t.user_id = u.id
+			where u.id = :id
+			""", nativeQuery = true)
+	Optional<AccountSession> selectAccountSession(@Param("id") long id, @Param("nonBlank") String nonBlank);
 
 	Optional<User> findByKakaoId(String kakaoId);
 

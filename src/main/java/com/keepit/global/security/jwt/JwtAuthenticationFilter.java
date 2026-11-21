@@ -1,7 +1,6 @@
 package com.keepit.global.security.jwt;
 
 import com.keepit.auth.exception.AuthErrorCode;
-import com.keepit.user.entity.User;
 import com.keepit.user.entity.UserStatus;
 import com.keepit.user.repository.UserRepository;
 import jakarta.servlet.FilterChain;
@@ -48,19 +47,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		}
 
 		// 계정·프로필 상태와 권한은 발급 시점과 달라질 수 있어 요청 시 DB를 기준으로 판정한다.
-		User user = users.findById(identity.get().memberId()).orElse(null);
-		boolean access = !identity.get().signup();
-		// 복구 때 세대가 증가하므로 재가입 이전 기기의 토큰을 재사용할 수 없다.
-		if (user == null || (access && (user.getStatus() == UserStatus.DELETED
-				|| user.getAuthGeneration() != identity.get().generation()))) {
+		var account = users.findAccountSession(identity.get().memberId()).orElse(null);
+		if (account == null) {
 			chain.doFilter(request, response);
 			return;
 		}
-		if (user.getStatus() == UserStatus.SUSPENDED) {
+
+		// 탈퇴 후 교체된 로그인 행을 가리키거나 행 식별자가 없는 이전 액세스 토큰은 재인증한다.
+		if (!identity.get().signup() && (account.getStatus() == UserStatus.DELETED
+				|| account.getSessionId() == null || !account.getSessionId().equals(identity.get().sessionId()))) {
+			chain.doFilter(request, response);
+			return;
+		}
+		if (account.getStatus() == UserStatus.SUSPENDED) {
 			denied.write(response, AuthErrorCode.SUSPENDED);
 			return;
 		}
-		if (user.getStatus() == UserStatus.DELETED || !user.isProfileComplete()) {
+		if (account.getStatus() == UserStatus.DELETED || account.getProfileComplete() == 0) {
 			denied.write(response, AuthErrorCode.PROFILE_REQUIRED);
 			return;
 		}
@@ -72,8 +75,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		}
 
 		// 현재 활성 회원 권한으로만 서비스 컨트롤러에 진입한다.
-		var authority = new SimpleGrantedAuthority("ROLE_" + user.getRole().name());
-		var auth = new UsernamePasswordAuthenticationToken(user.getId(), null, List.of(authority));
+		var authority = new SimpleGrantedAuthority("ROLE_" + account.getRole().name());
+		var auth = new UsernamePasswordAuthenticationToken(account.getMemberId(), null, List.of(authority));
 		SecurityContextHolder.getContext().setAuthentication(auth);
 		chain.doFilter(request, response);
 	}

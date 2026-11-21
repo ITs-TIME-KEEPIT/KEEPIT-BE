@@ -1,11 +1,10 @@
 package com.keepit.global.oauth.kakao;
 
+import jakarta.validation.constraints.Positive;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
+@Validated
 @ConfigurationProperties(prefix = "kakao")
-public record KakaoProperties(
-		String clientId,
-		String clientSecret,
-		String redirectUri
-) {
+public record KakaoProperties(@Positive long appId) {
 }
