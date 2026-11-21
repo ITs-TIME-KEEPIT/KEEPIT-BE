@@ -33,7 +33,7 @@ public class User extends BaseTimeEntity {
 	@Column(name = "kakao_id", nullable = false, unique = true, length = 64)
 	private String kakaoId;
 
-	@Column(columnDefinition = "LONGTEXT")
+	@Column(length = 20)
 	private String nickname;
 
 	@Column(name = "profile_image_key")

@@ -27,7 +27,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	@Query("select u from User u where u.id = :id")
 	Optional<User> lockById(@Param("id") Long id);
 
-	// 필터에 필요한 값만 전달하여 긴 프로필 닉네임을 매 요청마다 로딩하지 않는다.
+	// 필터에는 회원 식별값, 권한, 상태 및 프로필 완료 여부만 전달한다.
 	interface AccountSession {
 		Long getMemberId();
 		UserRole getRole();

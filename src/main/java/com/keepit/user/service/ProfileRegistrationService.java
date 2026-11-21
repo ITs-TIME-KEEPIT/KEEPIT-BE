@@ -11,6 +11,8 @@ import com.keepit.user.entity.UserStatus;
 import com.keepit.user.repository.UserRepository;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -41,6 +43,10 @@ public class ProfileRegistrationService {
 			throw new BaseException(AuthErrorCode.INVALID_NICKNAME);
 		}
 		String cleanNickname = nickname.strip();
+		int nicknameLength = cleanNickname.codePointCount(0, cleanNickname.length());
+		if (nicknameLength < 2 || nicknameLength > 10) {
+			throw new BaseException(AuthErrorCode.INVALID_NICKNAME);
+		}
 		if (phone == null || !PHONE.matcher(phone).matches()) {
 			throw new BaseException(AuthErrorCode.INVALID_PHONE);
 		}
@@ -65,6 +71,17 @@ public class ProfileRegistrationService {
 			tokens.endPreviousSession(user.getId());
 		}
 		user.completeProfile(cleanNickname, phone, key);
+		try {
+			users.flush();
+		} catch (DataIntegrityViolationException exception) {
+			if (exception.getCause() instanceof ConstraintViolationException violation) {
+				String constraint = violation.getConstraintName();
+				if ("uk_users_nickname".equals(constraint) || "users.uk_users_nickname".equals(constraint)) {
+					throw new BaseException(AuthErrorCode.NICKNAME_TAKEN);
+				}
+			}
+			throw exception;
+		}
 		return LoginResult.authenticated(user.getId(), tokens.issue(user));
 	}
 

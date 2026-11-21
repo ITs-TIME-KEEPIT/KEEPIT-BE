@@ -20,14 +20,15 @@ public class ImageFileStorage {
 	private final FileUploader uploader;
 
 	public String store(MultipartFile file, String directory) {
-		// 옷 사진과 프로필 사진 모두 실제 파일 시그니처와 확장자를 검사한다.
+		// 옷과 프로필 사진은 업로드 전에 확장자와 실제 이미지 데이터를 검사한다.
 		if (file == null || file.isEmpty()) {
 			throw new ImageException(ImageErrorCode.IMAGE_FILE_REQUIRED);
 		}
-		try (var input = file.getInputStream()) {
-			ImageFormat format = ImageFormat.detect(input)
+		try {
+			byte[] content = file.getBytes();
+			ImageFormat format = ImageFormat.detect(content)
 					.orElseThrow(() -> new ImageException(ImageErrorCode.UNSUPPORTED_IMAGE_FORMAT));
-			if (!format.matchesExtension(file.getOriginalFilename())) {
+			if (!format.matchesExtension(file.getOriginalFilename()) || !format.canDecode(content)) {
 				throw new ImageException(ImageErrorCode.UNSUPPORTED_IMAGE_FORMAT);
 			}
 		} catch (IOException exception) {

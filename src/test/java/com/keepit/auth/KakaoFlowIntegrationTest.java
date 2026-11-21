@@ -8,7 +8,10 @@ import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import java.nio.charset.StandardCharsets;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.web.client.HttpClientErrorException;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.keepit.TestcontainersConfiguration;
@@ -17,6 +20,7 @@ import com.keepit.global.s3.FileUploader;
 import com.keepit.global.oauth.kakao.KakaoOAuthClient;
 import com.keepit.global.oauth.kakao.dto.KakaoTokenInfo;
 import com.keepit.global.security.jwt.JwtTokenProvider;
+import com.keepit.image.support.TestImages;
 import com.keepit.user.entity.User;
 import com.keepit.user.repository.RefreshTokenRepository;
 import com.keepit.user.repository.UserRepository;
@@ -110,6 +114,25 @@ class KakaoFlowIntegrationTest {
 				.andExpect(jsonPath("$.code").value("AUTH_502_1"));
 	}
 
+	@Test
+	void kakaoBadRequestDistinguishesTemporaryFailureFromInvalidCredentials() throws Exception {
+		when(kakao.getTokenInfo("service-failure")).thenThrow(kakaoError(400, "{\"code\":-1}"));
+		submitToken("service-failure").andExpect(status().isBadGateway()).andExpect(jsonPath("$.code").value("AUTH_502_1"));
+		when(kakao.getTokenInfo("invalid-token")).thenThrow(kakaoError(400, "{\"code\":-401}"));
+		submitToken("invalid-token").andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTH_401_1"));
+		when(kakao.getTokenInfo("expired-token")).thenThrow(kakaoError(401, "{\"code\":-401}"));
+		submitToken("expired-token").andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTH_401_1"));
+		when(kakao.getTokenInfo("empty-error")).thenThrow(kakaoError(400, ""));
+		submitToken("empty-error").andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTH_401_1"));
+		when(kakao.getTokenInfo("malformed-error")).thenThrow(kakaoError(400, "invalid json"));
+		submitToken("malformed-error").andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTH_401_1"));
+	}
+
+	private static HttpClientErrorException kakaoError(int status, String json) {
+		return new HttpClientErrorException(HttpStatus.valueOf(status), "Kakao error",
+				json.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8);
+	}
+
 	private static final String PROFILE = "/api/v1/users/profile";
 
 	@Test
@@ -156,7 +179,7 @@ class KakaoFlowIntegrationTest {
 	@Test
 	void rollbackAlsoDeletesNewPhoto() throws Exception {
 		String signup = members.login("24112").signupToken();
-		var photo = new MockMultipartFile("profileImage", "face.jpg", "image/jpeg", new byte[]{(byte) 0xff, (byte) 0xd8, (byte) 0xff});
+		var photo = new MockMultipartFile("profileImage", "face.jpg", "image/jpeg", TestImages.encode("JPEG"));
 		String oversizedKey = "p".repeat(256);
 		when(uploader.upload(any(), org.mockito.ArgumentMatchers.eq("profiles"))).thenReturn(oversizedKey);
 		// 저장소가 컬럼보다 긴 키를 반환할 때 실제 DB 커밋 실패를 유도한다.
@@ -249,17 +272,24 @@ class KakaoFlowIntegrationTest {
 	}
 
 	@Test
-	void storesLongUnicodeNicknameAndPreservesLeadingPhoneZeroes() throws Exception {
+	void enforcesTwoToTenUnicodeCodePointsAndPreservesLeadingPhoneZeroes() throws Exception {
 		String token = members.login("24135").signupToken();
-		String name = "김·O’Neil O\'Neil 𠮷-e\u0301_".repeat(7000);
+		String name = "𠮷김·’N-e\u0301_'";
+		assertThat(name.codePointCount(0, name.length())).isEqualTo(10);
 		mvc.perform(multipart(PROFILE).header("Authorization", "Bearer " + token)
-				.param("nickname", name).param("phone", "00123456")).andExpect(status().isOk());
+				.param("nickname", " 𠮷 ").param("phone", "00123456"))
+				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("AUTH_400_2"));
+		mvc.perform(multipart(PROFILE).header("Authorization", "Bearer " + token)
+				.param("nickname", name + "김").param("phone", "00123456"))
+				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("AUTH_400_2"));
+		mvc.perform(multipart(PROFILE).header("Authorization", "Bearer " + token)
+				.param("nickname", " " + name + " ").param("phone", "00123456")).andExpect(status().isOk());
 		var saved = users.findByKakaoId("24135").orElseThrow();
 		assertThat(saved.getNickname()).isEqualTo(name);
 		assertThat(jdbc.queryForObject("""
-				SELECT DATA_TYPE FROM information_schema.columns
+				SELECT COLUMN_TYPE FROM information_schema.columns
 				WHERE table_schema=database() AND table_name='users' AND column_name='nickname'
-				""", String.class)).isEqualTo("longtext");
+				""", String.class)).isEqualTo("varchar(20)");
 		assertThat(jdbc.queryForObject("""
 				SELECT COUNT(*) FROM information_schema.columns
 				WHERE table_schema=database() AND table_name='users' AND column_name='auth_generation'
@@ -267,6 +297,42 @@ class KakaoFlowIntegrationTest {
 		assertThat(saved.getPhone()).isEqualTo("00123456");
 		String access = members.login("24135").accessToken();
 		mvc.perform(get("/api/v1/clothes").header("Authorization", "Bearer " + access)).andExpect(status().isOk());
+	}
+
+	@Test
+	void twoMembersCompetingForTheSameNicknameCanRetryAfterConflict() throws Exception {
+		String first = members.login("24140").signupToken();
+		String second = members.login("24141").signupToken();
+		var gate = new CountDownLatch(1);
+		var pool = Executors.newFixedThreadPool(2);
+		try {
+			var one = pool.submit(() -> { gate.await(); return register(first, " Café ").andReturn().getResponse(); });
+			var two = pool.submit(() -> { gate.await(); return register(second, "cafe").andReturn().getResponse(); });
+			gate.countDown();
+			var a = one.get(30, TimeUnit.SECONDS);
+			var b = two.get(30, TimeUnit.SECONDS);
+			assertThat(java.util.List.of(a.getStatus(), b.getStatus())).containsExactlyInAnyOrder(200, 409);
+			var conflict = a.getStatus() == 409 ? a : b;
+			assertThat(json.readTree(conflict.getContentAsByteArray()).path("code").asString()).isEqualTo("AUTH_409_2");
+			register(a.getStatus() == 409 ? first : second, "새별").andExpect(status().isOk());
+		} finally {
+			pool.shutdownNow();
+		}
+	}
+
+	@Test
+	void withdrawnMemberReservesNicknameUntilChoosingAnotherOne() throws Exception {
+		User previous = users.saveAndFlush(User.builder().kakaoId("24142").nickname("  Olive ").phone("01000000000").build());
+		jdbc.update("UPDATE users SET status='DELETED' WHERE id=?", previous.getId());
+		String pending = members.login("24143").signupToken();
+		register(pending, "olive").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("AUTH_409_2"));
+		register(members.login("24142").signupToken(), "Lemon").andExpect(status().isOk());
+		register(pending, "olive").andExpect(status().isOk());
+	}
+
+	private ResultActions register(String token, String nickname) throws Exception {
+		return mvc.perform(multipart(PROFILE).header("Authorization", "Bearer " + token)
+				.param("nickname", nickname).param("phone", "01000000000"));
 	}
 
 	@Test

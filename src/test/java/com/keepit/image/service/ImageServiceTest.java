@@ -18,10 +18,12 @@ import com.keepit.image.entity.Image;
 import com.keepit.image.exception.ImageErrorCode;
 import com.keepit.image.exception.ImageException;
 import com.keepit.image.repository.ImageRepository;
+import com.keepit.image.support.TestImages;
 import com.keepit.user.entity.User;
 import jakarta.persistence.EntityManager;
 import java.io.UncheckedIOException;
 import java.io.IOException;
+import java.util.Arrays;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -42,8 +44,8 @@ class ImageServiceTest {
 
 	private static final Long UPLOADER_ID = 1L;
 	private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 14, 15, 42, 10);
-	private static final byte[] JPEG = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49};
-	private static final byte[] PNG = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00};
+	private static final byte[] JPEG = TestImages.encode("JPEG");
+	private static final byte[] PNG = TestImages.encode("PNG");
 	private static final byte[] GIF = {0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01};
 
 	private final ImageRepository imageRepository = mock(ImageRepository.class);
@@ -119,6 +121,21 @@ class ImageServiceTest {
 	@DisplayName("허용하지 않는 형식은 IMAGE_400_2로 거절한다")
 	void 미지원_형식_거절() {
 		assertImageError(() -> imageService.upload(UPLOADER_ID, file("photo.jpg", GIF), null),
+				ImageErrorCode.UNSUPPORTED_IMAGE_FORMAT);
+	}
+
+	@Test
+	void truncatedImagesNeverReachStorage() {
+		assertImageError(() -> imageService.upload(UPLOADER_ID, file("photo.jpg", Arrays.copyOf(JPEG, JPEG.length - 2)), null),
+				ImageErrorCode.UNSUPPORTED_IMAGE_FORMAT);
+		assertImageError(() -> imageService.upload(UPLOADER_ID, file("photo.png", Arrays.copyOf(PNG, PNG.length - 1)), null),
+				ImageErrorCode.UNSUPPORTED_IMAGE_FORMAT);
+	}
+
+	@Test
+	void matchingSignatureAndTrailerAreInsufficient() {
+		byte[] invalid = {(byte) 0xff, (byte) 0xd8, (byte) 0xff, 0, 0, 0, (byte) 0xff, (byte) 0xd9};
+		assertImageError(() -> imageService.upload(UPLOADER_ID, file("photo.jpg", invalid), null),
 				ImageErrorCode.UNSUPPORTED_IMAGE_FORMAT);
 	}
 

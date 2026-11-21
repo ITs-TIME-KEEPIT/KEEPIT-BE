@@ -27,8 +27,22 @@ Content-Type: application/json
 
 ## 프로필 제출
 
-앱은 `POST /api/v1/users/profile`에 `multipart/form-data`로 프로필을 제출한다. 요청 헤더에 `Authorization: Bearer <signupToken>`을 보낸다. nickname은 유니코드 문자·결합문자·숫자, ASCII 공백, 점(.), 밑줄(_), 하이픈(-), 가운뎃점(·), 아포스트로피(' 또는 ’)를 허용한다. 앞뒤 공백을 제거하며 빈 닉네임은 거부한다. 별도 글자 수 제한은 없다. phone은 입력한 원문이 ASCII 숫자 1~20자리여야 한다. profileImage는 선택이며 JPEG·PNG 파일을 받을 수 있다. 앱은 400에서 입력을 수정하고, 401에서 로그인을 재개한다. 409는 이미 프로필 등록이 끝난 경우이므로 다시 로그인하여 일반 토큰을 받는다.
+앱은 `POST /api/v1/users/profile`에 `multipart/form-data`로 프로필을 제출한다. 요청 헤더에 `Authorization: Bearer <signupToken>`을 보낸다. nickname은 유니코드 문자·결합문자·숫자, ASCII 공백, 점(.), 밑줄(_), 하이픈(-), 가운뎃점(·), 아포스트로피(' 또는 ’)를 허용한다. 앞뒤 공백을 제거한 닉네임은 유니코드 코드 포인트 기준 2~10자여야 한다. phone은 입력한 원문이 ASCII 숫자 1~20자리여야 한다. profileImage는 선택이며 JPEG·PNG 파일을 받을 수 있다. 사진은 가로·세로가 각각 32,768픽셀 이하여야 하며 총 2억 화소까지 허용한다. 앱은 400에서 입력을 수정하고, 401에서 로그인을 재개한다. 409에서 앱은 응답 코드를 확인한다. `AUTH_409_1`이면 등록이 끝났으므로 다시 로그인한다. `AUTH_409_2`이면 프로필 입력 화면에서 다른 닉네임으로 다시 제출한다.
 
 이전 형식의 액세스 토큰을 쓰던 앱은 401 응답 시 카카오 로그인을 한 번 다시 진행한다. 일반 재로그인은 다른 기기의 액세스 토큰 유효 기간을 유지하며, 탈퇴 후 재가입하면 이전 기기의 액세스 토큰은 무효화된다.
 
 토큰을 포함한 성공 응답은 캐시하지 않는다. 프로필 완료 전에는 일반 로그인 토큰을 발급하지 않는다.
+
+## 닉네임 중복 기준
+
+닉네임은 앞뒤 ASCII 공백을 제거한 뒤 기존 MySQL 정렬 규칙인 `utf8mb4_unicode_ci`로 비교한다. 예를 들어 `Café`와 `cafe`는 같은 이름이다. 탈퇴한 회원의 닉네임도 예약되며, 같은 계정이 재가입하면서 다른 이름을 선택하면 이전 이름을 사용할 수 있다.
+
+기존 데이터에 중복이 있으면 V5 고유 인덱스 생성이 실패한다. 배포 전에 다음 조회로 충돌하는 회원을 확인하고 닉네임을 정리한다. 회원의 기존 닉네임은 자동 변경하지 않는다.
+
+```sql
+SELECT TRIM(nickname) AS nickname, COUNT(*) AS members, GROUP_CONCAT(id ORDER BY id) AS member_ids
+FROM users
+WHERE OCTET_LENGTH(TRIM(nickname)) > 0
+GROUP BY TRIM(nickname)
+HAVING COUNT(*) > 1;
+```

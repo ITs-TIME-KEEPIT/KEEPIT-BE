@@ -24,11 +24,11 @@ public interface UserProfileApiDocs {
 			@ApiResponse(responseCode = "400", description = "닉네임 또는 전화번호 입력 오류"),
 			@ApiResponse(responseCode = "401", description = "프로필 등록 토큰 누락·만료·무효"),
 			@ApiResponse(responseCode = "403", description = "정지 회원"),
-			@ApiResponse(responseCode = "409", description = "이미 프로필 등록 완료")
+			@ApiResponse(responseCode = "409", description = "AUTH_409_1은 등록 완료, AUTH_409_2는 다른 회원이 사용 중인 닉네임")
 	})
 	ResponseEntity<SuccessResponse<LoginResult>> register(
 			@Parameter(name = "Authorization", in = ParameterIn.HEADER, description = "Bearer 프로필 등록 토큰") String authorization,
-			@Parameter(description = "닉네임 (필수). 유니코드 문자·결합문자·숫자, 공백, 점·밑줄·하이픈·가운뎃점·아포스트로피 허용. 글자 수 제한 없음") String nickname,
+			@Parameter(description = "닉네임 (필수). 유니코드 문자·결합문자·숫자, 공백, 점·밑줄·하이픈·가운뎃점·아포스트로피 허용. 앞뒤 공백 제거 후 유니코드 코드 포인트 기준 2~10자. 다른 회원과 중복 불가") String nickname,
 			@Parameter(description = "전화번호 (필수). 공백·하이픈 없이 ASCII 숫자 1~20자리") String phone,
-			@Parameter(description = "프로필 사진, 선택") MultipartFile profileImage);
+			@Parameter(description = "프로필 사진 (선택). JPEG·PNG, 가로·세로 각각 32,768픽셀 이하, 총 2억 화소 이하") MultipartFile profileImage);
 }
