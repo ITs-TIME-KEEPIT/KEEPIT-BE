@@ -133,9 +133,9 @@ PR이 `develop`에 병합되어 push 이벤트가 발생하면 `.github/workflow
 운영 배포는 개발 배포의 설정을 바꾸는 방식이 아니라 별도 인프라·환경변수·권한·워크플로를 마련해야 합니다. 운영 배포 트리거는 현재 정의되지 않았습니다. 예를 들어 릴리스 태그를 만들 때 운영 전용 GitHub Actions 작업을 실행하도록 나중에 설정할 수 있습니다.
 최초 Terraform apply 이후 EC2의 `/opt/keepit/.env`와 RDS 애플리케이션 계정을 준비해야 첫 배포가 성공합니다. `.env`는 GitHub Actions에서 덮어쓰지 않습니다.
 
-환경변수는 첫 배포 전에 AWS 콘솔의 **Systems Manager → Session Manager**로 EC2에 접속해 `/opt/keepit/.env`에 입력합니다. `DB_URL`에는 Terraform의 `jdbc_url` 출력을 사용하고, `DB_USERNAME`과 `DB_PASSWORD`에는 별도 생성한 애플리케이션 계정의 값을 넣습니다. `JWT_SECRET`은 `openssl rand -hex 32` 등으로 생성한 키를 넣습니다. S3에 필요한 `AWS_REGION`과 `AWS_S3_BUCKET`은 Terraform의 `deployment_region`과 `s3_bucket_name` 출력입니다. S3는 EC2 IAM 역할로 인증합니다. 카카오 로그인을 테스트하려면 `KAKAO_CLIENT_ID`, `KAKAO_REDIRECT_URI` 및 카카오 앱에서 사용 설정한 경우 `KAKAO_CLIENT_SECRET`을 입력합니다. 파일은 root 소유·권한 `0600`으로 보관합니다. 실제 비밀값을 Git이나 GitHub Actions 로그에 입력하지 않습니다. 이후 자동 배포는 이 파일을 읽습니다. 비밀값 변경 시에는 EC2의 파일을 갱신하고 컨테이너를 다시 생성해 환경변수를 반영합니다.
+환경변수는 첫 배포 전에 AWS 콘솔의 **Systems Manager → Session Manager**로 EC2에 접속해 `/opt/keepit/.env`에 입력합니다. `DB_URL`에는 Terraform의 `jdbc_url` 출력을 사용하고, `DB_USERNAME`과 `DB_PASSWORD`에는 별도 생성한 애플리케이션 계정의 값을 넣습니다. `JWT_SECRET`은 `openssl rand -hex 32` 등으로 생성한 키를 넣습니다. S3에 필요한 `AWS_REGION`과 `AWS_S3_BUCKET`은 Terraform의 `deployment_region`과 `s3_bucket_name` 출력입니다. S3는 EC2 IAM 역할로 인증합니다. 카카오 모바일 로그인은 KEEPIT 앱 ID `1659627`을 사용합니다. 다른 환경은 `KAKAO_APP_ID`로 해당 카카오 앱의 숫자 ID를 설정합니다. 파일은 root 소유·권한 `0600`으로 보관합니다. 실제 비밀값을 Git이나 GitHub Actions 로그에 입력하지 않습니다. 이후 자동 배포는 이 파일을 읽습니다. 비밀값 변경 시에는 EC2의 파일을 갱신하고 컨테이너를 다시 생성해 환경변수를 반영합니다.
 
-Session Manager 터미널에서 `sudo install -m 600 -o root -g root /dev/null /opt/keepit/.env`로 파일을 만들고 `sudo vi /opt/keepit/.env`로 값을 입력합니다. DB 이름과 비밀번호는 RDS 관리자 계정 대신 별도 앱 계정의 값을 사용합니다. `KAKAO_REDIRECT_URI`는 실제 접속 주소와 8080 포트에 맞춰 등록해야 합니다. EC2가 교체되면 이 로컬 파일도 다시 준비해야 합니다.
+Session Manager 터미널에서 `sudo install -m 600 -o root -g root /dev/null /opt/keepit/.env`로 파일을 만들고 `sudo vi /opt/keepit/.env`로 값을 입력합니다. DB 이름과 비밀번호는 RDS 관리자 계정 대신 별도 앱 계정의 값을 사용합니다. EC2가 교체되면 이 로컬 파일도 다시 준비해야 합니다.
 
 현재 EC2 사양인 `t3.micro`는 1 GiB RAM이라 JVM·Docker·OS를 함께 실행하면 메모리 부족과 swap 지연이 생길 수 있습니다. 루트 디스크 8 GiB도 이미지 누적에 여유가 작습니다. 지속 구동 전에는 메모리와 디스크 사용량을 확인하고, 필요하면 `instance_type = "t3.small"` 및 디스크 용량 확대를 계획해야 합니다.
 

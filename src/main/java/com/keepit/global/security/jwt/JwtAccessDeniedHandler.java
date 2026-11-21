@@ -2,6 +2,7 @@ package com.keepit.global.security.jwt;
 
 import com.keepit.global.response.ErrorResponse;
 import com.keepit.global.response.code.ErrorResponseCode;
+import com.keepit.global.response.code.BaseResponseCode;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -27,7 +28,12 @@ public class JwtAccessDeniedHandler implements AccessDeniedHandler {
 	@Override
 	public void handle(HttpServletRequest request, HttpServletResponse response,
 			AccessDeniedException accessDeniedException) throws IOException {
-		ErrorResponse<Void> body = ErrorResponse.from(ErrorResponseCode.ACCESS_DENIED_REQUEST);
+		write(response, ErrorResponseCode.ACCESS_DENIED_REQUEST);
+	}
+
+	// 인증 필터에서 확인된 도메인별 접근 제한도 같은 공통 응답으로 직렬화한다.
+	public void write(HttpServletResponse response, BaseResponseCode code) throws IOException {
+		ErrorResponse<Void> body = ErrorResponse.from(code);
 		response.setStatus(body.getHttpStatus());
 		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 		response.setCharacterEncoding(StandardCharsets.UTF_8.name());

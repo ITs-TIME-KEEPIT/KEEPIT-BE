@@ -8,6 +8,7 @@ import java.io.InputStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -16,6 +17,16 @@ class ImageFormatTest {
 	static final byte[] JPEG_HEADER = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0x00, 0x10, 0x4A, 0x46};
 	static final byte[] PNG_HEADER = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
 	static final byte[] GIF_HEADER = {0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00};
+
+	@ParameterizedTest
+	@CsvSource({
+			"32768,1,true", "32769,1,false", "1,32768,true", "1,32769,false",
+			"20000,10000,true", "20000,10001,false", "16320,12240,true",
+			"0,100,false", "100,0,false", "2147483647,2147483647,false"
+	})
+	void checksSourceDimensionsBeforeDecoding(int width, int height, boolean supported) {
+		assertThat(ImageFormat.supportsDimensions(width, height)).isEqualTo(supported);
+	}
 
 	@Test
 	@DisplayName("JPEG 시그니처를 JPEG로 판별한다")
