@@ -145,16 +145,29 @@ class ClothingControllerTest {
 	}
 
 	@Test
-	@DisplayName("실측 값이 0.1보다 작거나 소수 둘째 자리까지 있으면 GLOBAL_400_2")
-	void 실측_범위() throws Exception {
-		postBody(VALID_BODY.replace("\"totalLength\": 105.0", "\"totalLength\": 0.0"))
+	@DisplayName("실측 값이 음수이거나 소수 둘째 자리까지 있으면 GLOBAL_400_2")
+	void 실측_범위_오류() throws Exception {
+		postBody(VALID_BODY.replace("\"totalLength\": 105.0", "\"totalLength\": -0.1"))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.code").value("GLOBAL_400_2"));
+				.andExpect(jsonPath("$.code").value("GLOBAL_400_2"))
+				.andExpect(jsonPath("$.message").value("실측 값이 올바르지 않습니다."));
 		postBody(VALID_BODY.replace("\"totalLength\": 105.0", "\"totalLength\": 105.25"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("GLOBAL_400_2"));
 
 		verifyNoInteractions(clothingService);
+	}
+
+	@Test
+	@DisplayName("실측 값 0(0.0)은 허용해 서비스까지 간다")
+	void 실측_0_허용() throws Exception {
+		when(clothingService.register(eq(LOGIN_USER_ID), any(ClothingCreateRequest.class))).thenReturn(42L);
+
+		postBody(VALID_BODY.replace("\"totalLength\": 105.0", "\"totalLength\": 0.0")
+						.replace("\"shoulderWidth\": 36.5", "\"shoulderWidth\": 0"))
+				.andExpect(status().isCreated());
+
+		verify(clothingService).register(eq(LOGIN_USER_ID), any(ClothingCreateRequest.class));
 	}
 
 	@Test
