@@ -64,6 +64,18 @@ resource "aws_iam_role" "github_deploy" {
   assume_role_policy = data.aws_iam_policy_document.github_deploy_trust.json
 }
 
+# GitHub Secret을 SSM에 전송하기 전에 암호화할 개발 전용 대칭 키를 만듭니다.
+resource "aws_kms_key" "deploy_env" {
+  description         = "Encrypt KEEPIT dev dotenv during GitHub Actions deployments"
+  enable_key_rotation = true
+}
+
+# 배포 스크립트가 키 ID를 하드코딩하지 않고 동일한 키를 찾게 합니다.
+resource "aws_kms_alias" "deploy_env" {
+  name          = "alias/${local.name}-deploy-env"
+  target_key_id = aws_kms_key.deploy_env.key_id
+}
+
 # 개발 배포 역할에 이미지 업로드와 SSM 배포에 필요한 권한을 정의합니다.
 data "aws_iam_policy_document" "github_deploy" {
   # GitHub Actions가 ECR 로그인 토큰을 발급받을 수 있게 합니다.
@@ -99,6 +111,18 @@ data "aws_iam_policy_document" "github_deploy" {
     actions   = ["ssm:GetCommandInvocation"]
     resources = ["*"]
   }
+  # GitHub는 개발 환경 파일을 암호화할 권한으로 암호문을 생성합니다.
+  statement {
+    sid       = "EncryptDeploymentEnvironment"
+    actions   = ["kms:Encrypt"]
+    resources = [aws_kms_key.deploy_env.arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:EncryptionContext:Application"
+      values   = [local.name]
+    }
+  }
 }
 
 # 배포 권한 정책을 GitHub Actions용 IAM 역할에 연결합니다.
@@ -129,4 +153,25 @@ resource "aws_iam_role_policy" "ecr_pull" {
   name   = "pull-application-image"
   role   = aws_iam_role.app.id
   policy = data.aws_iam_policy_document.ecr_pull.json
+}
+
+# EC2는 개발 배포 키와 컨텍스트로 전달된 환경 파일을 복호화합니다.
+data "aws_iam_policy_document" "deploy_env_decrypt" {
+  statement {
+    actions   = ["kms:Decrypt"]
+    resources = [aws_kms_key.deploy_env.arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:EncryptionContext:Application"
+      values   = [local.name]
+    }
+  }
+}
+
+# SSM 배포 명령이 EC2 인스턴스 역할을 사용해 환경 파일을 복호화하게 합니다.
+resource "aws_iam_role_policy" "deploy_env_decrypt" {
+  name   = "decrypt-deployment-environment"
+  role   = aws_iam_role.app.id
+  policy = data.aws_iam_policy_document.deploy_env_decrypt.json
 }
