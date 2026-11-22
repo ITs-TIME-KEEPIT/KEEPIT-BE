@@ -38,7 +38,7 @@ flowchart LR
 
 ## 비용과 변경 계획
 
-- [항목별 예상 비용](review/cost-estimate.md): 월 730시간, S3 1GB 가정 **$35.16/월**, 세금·크레딧 차감 전
+- [항목별 예상 비용](review/cost-estimate.md): 월 730시간, S3 1GB 가정 **$36.26/월**, 세금·크레딧 차감 전
 - [기존 인프라 plan 검토 결과](review/plan-summary.md): ECR·배포 권한 추가 전 **31개 생성, 변경 0개, 삭제 0개**
 - [공개 단가 원본](review/pricing-seoul.json): AWS Price List API의 서울 리전 응답
 
