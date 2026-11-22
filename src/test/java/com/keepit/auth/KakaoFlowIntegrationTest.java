@@ -350,7 +350,7 @@ class KakaoFlowIntegrationTest {
 
 	@Test
 	void protectedRouteDoesNotTreatLegacyWhitespaceAsACompleteProfile() throws Exception {
-		User existing = users.saveAndFlush(User.builder().kakaoId("24138").nickname("회원").phone("01012345678").build());
+		User existing = users.saveAndFlush(User.builder().kakaoId("24138").nickname("공백검사계정").phone("01012345678").build());
 		String auth = "Bearer " + members.login("24138").accessToken();
 		for (String blank : java.util.List.of(" ", "\t\n", "\u2003\u3000", "\u001c")) {
 			jdbc.update("UPDATE users SET nickname=? WHERE id=?", blank, existing.getId());
