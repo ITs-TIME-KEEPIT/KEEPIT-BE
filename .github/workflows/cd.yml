@@ -63,9 +63,20 @@ jobs:
         with:
           context: .
           push: true
+          # provenance attestation을 올리지 않아 배포 1회당 ECR 이미지가 1개만 생기고, 수명 주기 정책(최근 10개)이 배포 횟수 기준으로 동작한다.
+          provenance: false
           tags: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
 
       - name: Deploy through SSM
+        # 앱 환경값은 빌드 단계에 전달하지 않고 SSM 배포 단계에서만 읽는다.
+        env:
+          KEEPIT_ENV_DB_URL: ${{ secrets.DB_URL }}
+          KEEPIT_ENV_DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          KEEPIT_ENV_DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          KEEPIT_ENV_JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          KEEPIT_ENV_AWS_REGION: ${{ secrets.AWS_REGION }}
+          KEEPIT_ENV_AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          KEEPIT_ENV_KAKAO_APP_ID: ${{ secrets.KAKAO_APP_ID }}
         run: |
           latest_ref=$(git ls-remote --exit-code origin refs/heads/develop)
           read -r latest_sha _ <<< "$latest_ref"

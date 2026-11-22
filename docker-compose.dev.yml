@@ -5,7 +5,8 @@ services:
     container_name: keepit-app
     restart: always
     env_file:
-      - .env
+      # 배포 중에는 교체 후보 환경 파일을 검증하고, 평소에는 .env를 읽는다.
+      - ${KEEPIT_APP_ENV_FILE:-.env}
     environment:
       SPRING_PROFILES_ACTIVE: dev
     ports:

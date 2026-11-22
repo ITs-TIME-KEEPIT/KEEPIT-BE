@@ -7,13 +7,13 @@ IPv4와 Secrets Manager 단가는 아래 공식 요금 페이지에서 확인했
 | 항목 | 계산 기준 | 월 USD |
 | --- | --- | ---: |
 | EC2 t3.micro | $ 0.0130000000/hour × 730 | $9.4900 |
-| EC2 gp3 8 GiB | $ 0.0912000000/GiB-month × 8 | $0.7296 |
+| EC2 gp3 20 GiB | $ 0.0912000000/GiB-month × 20 | $1.8240 |
 | Public IPv4, 1 address | $0.005/hour × 730 | $3.6500 |
 | RDS db.t4g.micro, Single-AZ | $ 0.0250000000/hour × 730 | $18.2500 |
 | RDS gp3 20 GiB | $ 0.1310000000/GiB-month × 20 | $2.6200 |
 | RDS-managed Secrets Manager, 1 secret | $0.40/secret-month | $0.4000 |
 | S3 Standard example: 1 GB stored | $ 0.0250000000/GB-month × 1 | $0.0250 |
-| **기본 합계** | **S3 1GB 가정** | **$35.16** |
+| **기본 합계** | **S3 1GB 가정** | **$36.26** |
 
 기본 합계는 비용 상한이 아닙니다. 크레딧 적용 여부·잔액·만료일은 이 조회로 확인하지 않았습니다.
 인터넷 송신, S3/API 요청, AZ 간 데이터 전송, 추가 로그·백업·스냅샷·비밀값 요청 요금은 별도입니다.

@@ -72,10 +72,10 @@ resource "aws_instance" "app" {
     instance_metadata_tags      = "disabled"
   }
 
-  # 운영체제와 Docker 데이터에 사용할 암호화된 8GiB gp3 루트 디스크를 설정합니다.
+  # 운영체제와 Docker 이미지가 배포 중 공간 부족으로 실패하지 않도록 암호화된 20GiB gp3 루트 디스크를 설정합니다.
   root_block_device {
     volume_type           = "gp3"
-    volume_size           = 8
+    volume_size           = 20
     encrypted             = true
     delete_on_termination = true
     tags                  = { Name = "${local.name}-root" }

@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | 계정 / 리전 | `781953768324` / 서울 `ap-northeast-2` | 로그인 프로필과 일치, 한국 사용자 접속 고려 |
 | EC2 | `t3.micro`, 2 vCPU / RAM 1 GiB, Ubuntu 24.04 x86_64 | 현재 amd64 Docker 이미지와 호환되는 작은 개발용 구성. 안정적인 상시 구동은 `t3.small` 검토 |
-| EC2 디스크 | 암호화 gp3 8 GiB, swap 1 GiB 포함 | 조회한 공식 AMI 루트 디스크의 최소 크기 |
+| EC2 디스크 | 암호화 gp3 20 GiB, swap 1 GiB 포함 | 8 GiB에서 배포 이미지를 받다 디스크 부족으로 실패해 증설(#29) |
 | RDS | MySQL 8.4, `db.t4g.micro`, 2 vCPU / RAM 1 GiB, Single-AZ | 작은 MySQL 인스턴스, ARM 여부는 JDBC 클라이언트와 무관 |
 | RDS 디스크 | 암호화 gp3 20 GiB, 자동 증설 끔 | 해당 엔진·클래스의 조회된 최소 용량 |
 | S3 | Standard, 사용량 과금, 비공개, SSE-S3 | 파일 저장, 예약 용량 없음 |
@@ -22,7 +22,7 @@
 nano급(512 MiB)은 Spring Boot·Docker·OS를 함께 실행하기에 부족할 수 있어 제외했습니다.
 ARM 이미지를 별도 빌드·검증하면 `t4g.micro`를 비교할 수 있지만, 현재 설계의 AMI는 x86 전용입니다.
 1 GiB도 부하·JVM 설정에 따라 OOM이 발생할 수 있으며, 초기 메모리 상한과 실측을 바탕으로 `t3.small`로 조정해야 합니다.
-8 GiB 디스크에는 많은 이미지·빌드 캐시를 보관할 수 없습니다. 빌드는 GitHub Actions에서 수행하고 배포 시 오래된 이미지를 관리합니다.
+20 GiB 디스크에도 많은 이미지·빌드 캐시를 보관하지 않습니다. 빌드는 GitHub Actions에서 수행하고, 배포 스크립트가 이미지를 받기 전과 배포 후에 실행 중이 아닌 이미지를 정리합니다.
 
 ```mermaid
 flowchart LR
@@ -38,7 +38,7 @@ flowchart LR
 
 ## 비용과 변경 계획
 
-- [항목별 예상 비용](review/cost-estimate.md): 월 730시간, S3 1GB 가정 **$35.16/월**, 세금·크레딧 차감 전
+- [항목별 예상 비용](review/cost-estimate.md): 월 730시간, S3 1GB 가정 **$36.26/월**, 세금·크레딧 차감 전
 - [기존 인프라 plan 검토 결과](review/plan-summary.md): ECR·배포 권한 추가 전 **31개 생성, 변경 0개, 삭제 0개**
 - [공개 단가 원본](review/pricing-seoul.json): AWS Price List API의 서울 리전 응답
 
@@ -122,28 +122,37 @@ plan 성공은 EC2/RDS 생성 API의 모든 IAM 권한·실제 부팅·패키지
 
 ## 애플리케이션 연결 시 필요한 작업
 
-PR이 `develop`에 병합되어 push 이벤트가 발생하면 `.github/workflows/cd.yml`이 빌드·테스트 후 ECR에 커밋 SHA 이미지로 push하고 SSM으로 개발 EC2에서 `docker-compose.dev.yml`을 실행합니다. 수동 실행에서도 배포 작업은 `develop`에서만 실행되며, AWS 배포 역할도 해당 브랜치의 OIDC 토큰만 허용합니다. `docker-compose.yml`은 로컬 PC의 MySQL·선택적 Redis 용도입니다. `docker-compose.prod.yml`은 Nginx를 포함한 향후 운영용 파일이며 현재 자동 배포 대상이 아닙니다.
+PR이 `develop`에 병합되어 push 이벤트가 발생하면 `.github/workflows/cd.yml`이 빌드·테스트 후 ECR에 커밋 SHA 이미지로 push하고 SSM으로 개발 EC2에서 `docker-compose.dev.yml`을 실행합니다. 자동·수동 배포 모두 `develop`에서 실행하며, AWS 배포 역할도 해당 브랜치의 OIDC 토큰만 허용합니다. `docker-compose.yml`은 로컬 PC의 MySQL·선택적 Redis 용도입니다. `docker-compose.prod.yml`은 Nginx를 포함한 향후 운영용 파일이며 현재 자동 배포 대상이 아닙니다.
 
 | 환경 | Compose | Spring 프로필 | DB | 외부 포트 | 현재 배포 트리거 |
 | --- | --- | --- | --- | --- | --- |
 | 로컬 PC | `docker-compose.yml` | `local` (IDE/bootRun) | 로컬 MySQL 컨테이너 | 앱 8080은 IDE에서 실행 | 개발자가 직접 실행 |
-| 개발 EC2 | `docker-compose.dev.yml` | `dev` | 비공개 RDS, EC2의 `/opt/keepit/.env` | 호스트 80·8080 → 앱 8080 | `develop` push 또는 `develop`에서 수동 실행 |
+| 개발 EC2 | `docker-compose.dev.yml` | `dev` | 비공개 RDS, GitHub Secret에서 생성한 `/opt/keepit/.env` | 호스트 80·8080 → 앱 8080 | `develop` push 또는 `develop`에서 수동 실행 |
 | 향후 운영 | `docker-compose.prod.yml` | `prod` | 운영 전용 DB·비밀값 필요 | Nginx 80 | 아직 없음 |
 
 운영 배포는 개발 배포의 설정을 바꾸는 방식이 아니라 별도 인프라·환경변수·권한·워크플로를 마련해야 합니다. 운영 배포 트리거는 현재 정의되지 않았습니다. 예를 들어 릴리스 태그를 만들 때 운영 전용 GitHub Actions 작업을 실행하도록 나중에 설정할 수 있습니다.
-최초 Terraform apply 이후 EC2의 `/opt/keepit/.env`와 RDS 애플리케이션 계정을 준비해야 첫 배포가 성공합니다. `.env`는 GitHub Actions에서 덮어쓰지 않습니다.
+첫 배포 전 Terraform으로 개발 배포 KMS 키와 IAM 정책을 적용하고 RDS 앱 계정을 준비합니다. GitHub 저장소의 **Settings → Secrets and variables → Actions → Repository secrets**에 아래 항목을 각각 등록합니다. Secret 이름에는 표의 이름을, 값에는 `KEY=` 접두어 없이 실제 앱 설정값을 입력합니다. 기존 EC2를 전환할 때는 DB 비밀번호와 JWT 서명 키를 유지합니다.
 
-환경변수는 첫 배포 전에 AWS 콘솔의 **Systems Manager → Session Manager**로 EC2에 접속해 `/opt/keepit/.env`에 입력합니다. `DB_URL`에는 Terraform의 `jdbc_url` 출력을 사용하고, `DB_USERNAME`과 `DB_PASSWORD`에는 별도 생성한 애플리케이션 계정의 값을 넣습니다. `JWT_SECRET`은 `openssl rand -hex 32` 등으로 생성한 키를 넣습니다. S3에 필요한 `AWS_REGION`과 `AWS_S3_BUCKET`은 Terraform의 `deployment_region`과 `s3_bucket_name` 출력입니다. S3는 EC2 IAM 역할로 인증합니다. 카카오 모바일 로그인은 KEEPIT 앱 ID `1659627`을 사용합니다. 다른 환경은 `KAKAO_APP_ID`로 해당 카카오 앱의 숫자 ID를 설정합니다. 파일은 root 소유·권한 `0600`으로 보관합니다. 실제 비밀값을 Git이나 GitHub Actions 로그에 입력하지 않습니다. 이후 자동 배포는 이 파일을 읽습니다. 비밀값 변경 시에는 EC2의 파일을 갱신하고 컨테이너를 다시 생성해 환경변수를 반영합니다.
+| Repository Secret 이름 | 필수 | 등록할 값 |
+| --- | --- | --- |
+| `DB_URL` | 예 | 기존 개발 JDBC URL 또는 Terraform `jdbc_url` 출력 |
+| `DB_USERNAME` | 예 | 기존 RDS 애플리케이션 DB 계정 |
+| `DB_PASSWORD` | 예 | 해당 앱 계정의 기존 비밀번호 |
+| `JWT_SECRET` | 예 | 기존 개발 JWT 서명 키 |
+| `AWS_REGION` | 예 | `ap-northeast-2` |
+| `AWS_S3_BUCKET` | 예 | Terraform `s3_bucket_name` 출력 |
+| `KAKAO_APP_ID` | 선택 | 다른 카카오 앱을 쓸 때 해당 숫자 ID. 기본값은 `1659627` |
 
-Session Manager 터미널에서 `sudo install -m 600 -o root -g root /dev/null /opt/keepit/.env`로 파일을 만들고 `sudo vi /opt/keepit/.env`로 값을 입력합니다. DB 이름과 비밀번호는 RDS 관리자 계정 대신 별도 앱 계정의 값을 사용합니다. EC2가 교체되면 이 로컬 파일도 다시 준비해야 합니다.
+배포 러너가 개별 Secret을 Compose dotenv 형식으로 합쳐 KMS로 암호화한 뒤 암호문을 SSM에 전달합니다. 생성한 파일은 UTF-8 4,096바이트까지 지원합니다. EC2가 자기 IAM 역할로 복호화해 권한 `0600`의 `/opt/keepit/.env`로 저장합니다. EC2를 교체해도 워크플로가 파일을 다시 생성합니다. 값을 변경한 뒤 `develop`의 워크플로를 수동으로 실행하면 컨테이너에 반영됩니다.
 
-현재 EC2 사양인 `t3.micro`는 1 GiB RAM이라 JVM·Docker·OS를 함께 실행하면 메모리 부족과 swap 지연이 생길 수 있습니다. 루트 디스크 8 GiB도 이미지 누적에 여유가 작습니다. 지속 구동 전에는 메모리와 디스크 사용량을 확인하고, 필요하면 `instance_type = "t3.small"` 및 디스크 용량 확대를 계획해야 합니다.
+수동 실행은 GitHub의 **Actions → Deploy to EC2 → Run workflow**에서 `develop`을 선택합니다. GitHub가 수동 실행을 제공하려면 기본 브랜치에도 해당 워크플로 파일이 있어야 합니다.
 
-- EC2의 `/opt/keepit/.env`에 운영 비밀값을 준비. Compose 파일은 배포 워크플로가 SSM으로 전달
+현재 EC2 사양인 `t3.micro`는 1 GiB RAM이라 JVM·Docker·OS를 함께 실행하면 메모리 부족과 swap 지연이 생길 수 있습니다. 루트 디스크는 20 GiB로 늘렸지만 지속 구동 전에는 메모리와 디스크 사용량을 확인하고, 필요하면 `instance_type = "t3.small"`을 계획해야 합니다.
+
+- Compose 파일과 암호화된 개발 환경 파일은 배포 워크플로가 SSM으로 전달
 - RDS 관리자 secret은 운영자가 확인하고 애플리케이션용 DB 사용자를 별도로 생성. 앱에 관리자 계정을 사용하지 않음
-- 앱 DB 비밀번호·JWT·카카오 비밀값은 SSM Parameter Store SecureString 등으로 별도 관리. 값은 Terraform으로 읽어들이지 않음
-- EC2 Role은 해당 S3 버킷 접근, ECR 이미지 pull, SSM 기본 권한을 보유. RDS 관리자 secret 읽기 권한은 부여하지 않음
-- SecureString을 서버에서 가져오려면 해당 경로로 제한한 GetParameter/KMS 권한과 런타임 주입 절차를 별도 추가
+- 앱 DB 비밀번호와 JWT 서명 키는 GitHub Secret으로 관리. Terraform은 KMS 키와 IAM 권한만 관리
+- EC2 Role은 해당 S3 버킷 접근, ECR 이미지 pull, SSM 기본 권한과 개발 환경 파일의 KMS 복호화 권한을 보유. RDS 관리자 secret은 운영자가 관리
 - RDS TLS `require_secure_transport=1` 강제. 개발용 `jdbc_url`은 `sslMode=REQUIRED`로 암호화하며, 실서비스 전에 JVM trust store에 RDS CA를 설치하고 `VERIFY_IDENTITY`로 인증서와 호스트를 검증
 - 개발 프로필의 S3 서비스는 비공개 파일에 10분 유효한 서명 다운로드 URL을 생성합니다.
 - 파일 CORS는 프런트엔드 도메인이 결정된 후 필요한 origin·method만 허용
@@ -159,7 +168,7 @@ Session Manager 터미널에서 `sudo install -m 600 -o root -g root /dev/null /
 - 정리할 때 별도 승인을 받고 백업을 확보한 후 이 보호 장치를 의도적으로 해제해야 합니다. `force_destroy`는 켜지 않습니다.
 - RDS 최종 스냅샷 이름 `keepit-dev-final`이 이미 존재하면 새 이름을 지정해야 합니다. 스냅샷·보존 백업은 삭제 후에도 과금될 수 있습니다.
 - EC2 자동 public IPv4는 중지·시작 후 바뀔 수 있습니다. EIP를 만들지 않았으므로 DNS 고정 운영은 다음 설계에서 결정합니다.
-- EC2 root disk는 종료 시 삭제됩니다. DB·사용자 파일은 RDS·S3에 보관하고 `.env`와 이미지의 복구 절차를 별도로 준비합니다.
+- EC2 root disk는 종료 시 삭제됩니다. DB·사용자 파일은 RDS·S3에 보관합니다. 배포 중 GitHub Secret으로 `.env`를 다시 만들고 ECR에서 이미지를 다운로드합니다.
 - 현재는 단독 검토용 local state입니다. 첫 apply 후 state를 잃으면 리소스 연결을 잃으므로 Git 외부의 암호화된 저장소에 백업해야 합니다.
 - **팀이 apply하기 전에는 S3 backend(버전 관리·암호화·퍼블릭 차단·`use_lockfile=true`)로 이전해야 합니다.**
   state 전용 버킷은 애플리케이션 파일 버킷과 분리하고 선행 생성한 뒤 backend 변경과 `terraform init -migrate-state`를 진행합니다.

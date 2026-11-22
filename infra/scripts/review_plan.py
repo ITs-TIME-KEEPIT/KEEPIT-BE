@@ -36,7 +36,7 @@ check(db["deletion_protection"] and not db["skip_final_snapshot"], "Database del
 check(not db["multi_az"] and db["allocated_storage"] == 20, "Review minimum RDS capacity")
 check(db["instance_class"] == "db.t4g.micro", "Review RDS instance cost")
 check(db["availability_zone"] == value("aws_subnet.public")["availability_zone"], "EC2 and RDS must start in the same AZ")
-check(app["instance_type"] == "t3.micro" and app["root_block_device"][0]["volume_size"] == 8, "Review EC2 capacity and disk cost")
+check(app["instance_type"] == "t3.micro" and app["root_block_device"][0]["volume_size"] == 20, "Review EC2 capacity and disk cost")
 check(app["root_block_device"][0]["encrypted"], "EC2 EBS must be encrypted")
 check(app["credit_specification"][0]["cpu_credits"] == "standard", "Prevent unreviewed EC2 surplus credit charges")
 check(app["metadata_options"][0]["http_tokens"] == "required" and app["metadata_options"][0]["http_put_response_hop_limit"] == 2, "Container IAM credentials must use IMDSv2")
