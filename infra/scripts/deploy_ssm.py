@@ -55,6 +55,8 @@ def main() -> None:
         "cd /opt/keepit",
         f"aws ecr get-login-password --region {args.region} | docker login --username AWS --password-stdin {registry}",
         "docker compose --env-file .image.env -f docker-compose.dev.yml config --quiet",
+        # 이전 배포가 실패해 남은 이미지 때문에 새 이미지를 받지 못하는 일이 없도록, 실행 중인 컨테이너가 쓰지 않는 이미지를 먼저 지운다.
+        "docker image prune -af",
         "docker compose --env-file .image.env -f docker-compose.dev.yml pull",
         "docker compose --env-file .image.env -f docker-compose.dev.yml up -d --remove-orphans",
         r'''for ((attempt = 1; attempt <= 60; attempt++)); do
@@ -72,7 +74,8 @@ def main() -> None:
   fi
   sleep 2
 done''',
-        "docker image prune -f",
+        # 새 컨테이너가 뜬 뒤에는 교체된 이전 버전 이미지까지 지워 다음 배포 공간을 확보한다.
+        "docker image prune -af",
     ]
     command_id = aws(
         "ssm", "send-command", "--region", args.region,

@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | 계정 / 리전 | `781953768324` / 서울 `ap-northeast-2` | 로그인 프로필과 일치, 한국 사용자 접속 고려 |
 | EC2 | `t3.micro`, 2 vCPU / RAM 1 GiB, Ubuntu 24.04 x86_64 | 현재 amd64 Docker 이미지와 호환되는 작은 개발용 구성. 안정적인 상시 구동은 `t3.small` 검토 |
-| EC2 디스크 | 암호화 gp3 8 GiB, swap 1 GiB 포함 | 조회한 공식 AMI 루트 디스크의 최소 크기 |
+| EC2 디스크 | 암호화 gp3 20 GiB, swap 1 GiB 포함 | 8 GiB에서 배포 이미지를 받다 디스크 부족으로 실패해 증설(#29) |
 | RDS | MySQL 8.4, `db.t4g.micro`, 2 vCPU / RAM 1 GiB, Single-AZ | 작은 MySQL 인스턴스, ARM 여부는 JDBC 클라이언트와 무관 |
 | RDS 디스크 | 암호화 gp3 20 GiB, 자동 증설 끔 | 해당 엔진·클래스의 조회된 최소 용량 |
 | S3 | Standard, 사용량 과금, 비공개, SSE-S3 | 파일 저장, 예약 용량 없음 |
@@ -22,7 +22,7 @@
 nano급(512 MiB)은 Spring Boot·Docker·OS를 함께 실행하기에 부족할 수 있어 제외했습니다.
 ARM 이미지를 별도 빌드·검증하면 `t4g.micro`를 비교할 수 있지만, 현재 설계의 AMI는 x86 전용입니다.
 1 GiB도 부하·JVM 설정에 따라 OOM이 발생할 수 있으며, 초기 메모리 상한과 실측을 바탕으로 `t3.small`로 조정해야 합니다.
-8 GiB 디스크에는 많은 이미지·빌드 캐시를 보관할 수 없습니다. 빌드는 GitHub Actions에서 수행하고 배포 시 오래된 이미지를 관리합니다.
+20 GiB 디스크에도 많은 이미지·빌드 캐시를 보관하지 않습니다. 빌드는 GitHub Actions에서 수행하고, 배포 스크립트가 이미지를 받기 전과 배포 후에 실행 중이 아닌 이미지를 정리합니다.
 
 ```mermaid
 flowchart LR
@@ -137,7 +137,7 @@ PR이 `develop`에 병합되어 push 이벤트가 발생하면 `.github/workflow
 
 Session Manager 터미널에서 `sudo install -m 600 -o root -g root /dev/null /opt/keepit/.env`로 파일을 만들고 `sudo vi /opt/keepit/.env`로 값을 입력합니다. DB 이름과 비밀번호는 RDS 관리자 계정 대신 별도 앱 계정의 값을 사용합니다. EC2가 교체되면 이 로컬 파일도 다시 준비해야 합니다.
 
-현재 EC2 사양인 `t3.micro`는 1 GiB RAM이라 JVM·Docker·OS를 함께 실행하면 메모리 부족과 swap 지연이 생길 수 있습니다. 루트 디스크 8 GiB도 이미지 누적에 여유가 작습니다. 지속 구동 전에는 메모리와 디스크 사용량을 확인하고, 필요하면 `instance_type = "t3.small"` 및 디스크 용량 확대를 계획해야 합니다.
+현재 EC2 사양인 `t3.micro`는 1 GiB RAM이라 JVM·Docker·OS를 함께 실행하면 메모리 부족과 swap 지연이 생길 수 있습니다. 루트 디스크는 20 GiB로 늘렸지만 지속 구동 전에는 메모리와 디스크 사용량을 확인하고, 필요하면 `instance_type = "t3.small"`을 계획해야 합니다.
 
 - EC2의 `/opt/keepit/.env`에 운영 비밀값을 준비. Compose 파일은 배포 워크플로가 SSM으로 전달
 - RDS 관리자 secret은 운영자가 확인하고 애플리케이션용 DB 사용자를 별도로 생성. 앱에 관리자 계정을 사용하지 않음
