@@ -24,7 +24,7 @@ def price(item, description=None):
 hours = Decimal(730)
 rows = [
     ("EC2 t3.micro", f"$ {price('EC2 t3.micro')}/hour × 730", price("EC2 t3.micro") * hours),
-    ("EC2 gp3 8 GiB", f"$ {price('EBS gp3')}/GiB-month × 8", price("EBS gp3") * 8),
+    ("EC2 gp3 20 GiB", f"$ {price('EBS gp3')}/GiB-month × 20", price("EBS gp3") * 20),
     ("Public IPv4, 1 address", "$0.005/hour × 730", Decimal("0.005") * hours),
     ("RDS db.t4g.micro, Single-AZ", f"$ {price('RDS db.t4g.micro', 'instance hour')}/hour × 730", price("RDS db.t4g.micro", "instance hour") * hours),
     ("RDS gp3 20 GiB", f"$ {price('RDS gp3')}/GiB-month × 20", price("RDS gp3") * 20),
