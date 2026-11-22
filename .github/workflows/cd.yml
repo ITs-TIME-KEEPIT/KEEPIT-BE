@@ -63,6 +63,8 @@ jobs:
         with:
           context: .
           push: true
+          # provenance attestation을 올리지 않아 배포 1회당 ECR 이미지가 1개만 생기고, 수명 주기 정책(최근 10개)이 배포 횟수 기준으로 동작한다.
+          provenance: false
           tags: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
 
       - name: Deploy through SSM
