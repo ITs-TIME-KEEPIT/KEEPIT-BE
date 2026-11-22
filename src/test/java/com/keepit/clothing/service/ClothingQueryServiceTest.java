@@ -97,7 +97,7 @@ class ClothingQueryServiceTest {
 	}
 
 	@Test
-	@DisplayName("대여 가능·미삭제 옷만 최신 등록순으로 주고, 카드 필드를 채운다")
+	@DisplayName("대여 가능·미삭제 옷만 최신 등록순(id 내림차순)으로 주고, 카드 필드를 채운다")
 	void 목록_필터와_정렬_카드필드() {
 		Clothing older = clothing("오래된 셔츠", ClothingCategory.TOP, 0);
 		Clothing newer = clothing("새 원피스", ClothingCategory.DRESS, 10);
@@ -110,11 +110,12 @@ class ClothingQueryServiceTest {
 		photo(newer, PhotoPart.BACK, -1, "clothes/back.jpg");
 		flushAndClear();
 
-		ClothingListResponse response = queryService.getList(null, 0, 20);
+		ClothingListResponse response = queryService.getList(null, null, 20);
 
 		assertThat(response.content()).extracting(ClothingCardResponse::clothesId)
 				.containsExactly(newer.getId(), older.getId());
 		assertThat(response.hasNext()).isFalse();
+		assertThat(response.nextCursor()).isNull();
 		ClothingCardResponse card = response.content().get(0);
 		assertThat(card.thumbnailUrl()).as("전면 사진 중 sort_order가 가장 작은 것")
 				.isEqualTo("/local-images/clothes/front-0.jpg");
@@ -136,49 +137,71 @@ class ClothingQueryServiceTest {
 		Clothing dress = clothing("원피스", ClothingCategory.DRESS, 1);
 		flushAndClear();
 
-		assertThat(queryService.getList(ClothingCategory.DRESS, 0, 20).content())
+		assertThat(queryService.getList(ClothingCategory.DRESS, null, 20).content())
 				.extracting(ClothingCardResponse::clothesId)
 				.containsExactly(dress.getId());
 	}
 
 	@Test
-	@DisplayName("size만큼 잘라 주고 다음 페이지가 있으면 hasNext가 true")
-	void 페이지네이션() {
+	@DisplayName("nextCursor로 이어 받으면 겹치거나 빠지는 옷 없이 끝까지 받고, 마지막 묶음은 nextCursor가 null")
+	void 커서로_이어_받기() {
 		Clothing first = clothing("1", ClothingCategory.TOP, 0);
 		Clothing second = clothing("2", ClothingCategory.TOP, 1);
 		Clothing third = clothing("3", ClothingCategory.TOP, 2);
 		flushAndClear();
 
-		ClothingListResponse page0 = queryService.getList(null, 0, 2);
-		ClothingListResponse page1 = queryService.getList(null, 1, 2);
+		ClothingListResponse firstBatch = queryService.getList(null, null, 2);
+		ClothingListResponse secondBatch = queryService.getList(null, firstBatch.nextCursor(), 2);
 
-		assertThat(page0.content()).extracting(ClothingCardResponse::clothesId)
+		assertThat(firstBatch.content()).extracting(ClothingCardResponse::clothesId)
 				.containsExactly(third.getId(), second.getId());
-		assertThat(page0.hasNext()).isTrue();
-		assertThat(page0.page()).isZero();
-		assertThat(page0.size()).isEqualTo(2);
-		assertThat(page1.content()).extracting(ClothingCardResponse::clothesId).containsExactly(first.getId());
-		assertThat(page1.hasNext()).isFalse();
+		assertThat(firstBatch.hasNext()).isTrue();
+		assertThat(firstBatch.nextCursor()).as("다음 커서는 이번 묶음의 마지막 id").isEqualTo(second.getId());
+		assertThat(secondBatch.content()).extracting(ClothingCardResponse::clothesId).containsExactly(first.getId());
+		assertThat(secondBatch.hasNext()).isFalse();
+		assertThat(secondBatch.nextCursor()).isNull();
 	}
 
 	@Test
-	@DisplayName("등록 시각이 같으면 id가 큰 옷이 먼저 온다")
-	void 같은_시각은_id_내림차순() {
-		Clothing a = clothing("a", ClothingCategory.TOP, 5);
-		Clothing b = clothing("b", ClothingCategory.TOP, 5);
+	@DisplayName("스크롤 중에 새 옷이 등록돼도 다음 묶음에 같은 옷이 다시 나오지 않는다")
+	void 스크롤_중_새_등록() {
+		Clothing first = clothing("1", ClothingCategory.TOP, 0);
+		Clothing second = clothing("2", ClothingCategory.TOP, 1);
+		Clothing third = clothing("3", ClothingCategory.TOP, 2);
+		flushAndClear();
+		ClothingListResponse firstBatch = queryService.getList(null, null, 2);
+
+		clothing("새로 등록", ClothingCategory.TOP, 3);
+		flushAndClear();
+		ClothingListResponse secondBatch = queryService.getList(null, firstBatch.nextCursor(), 2);
+
+		assertThat(firstBatch.content()).extracting(ClothingCardResponse::clothesId)
+				.containsExactly(third.getId(), second.getId());
+		assertThat(secondBatch.content()).extracting(ClothingCardResponse::clothesId).containsExactly(first.getId());
+	}
+
+	@Test
+	@DisplayName("없는 id를 커서로 보내도 그보다 작은 id의 옷을 정상으로 준다")
+	void 없는_id_커서() {
+		Clothing first = clothing("1", ClothingCategory.TOP, 0);
+		Clothing second = clothing("2", ClothingCategory.TOP, 1);
 		flushAndClear();
 
-		assertThat(queryService.getList(null, 0, 20).content()).extracting(ClothingCardResponse::clothesId)
-				.containsExactly(b.getId(), a.getId());
+		ClothingListResponse response = queryService.getList(null, second.getId() + 1000, 20);
+
+		assertThat(response.content()).extracting(ClothingCardResponse::clothesId)
+				.containsExactly(second.getId(), first.getId());
+		assertThat(response.hasNext()).isFalse();
 	}
 
 	@Test
 	@DisplayName("조건에 맞는 옷이 없으면 빈 목록")
 	void 빈_목록() {
-		ClothingListResponse response = queryService.getList(ClothingCategory.ACC, 0, 20);
+		ClothingListResponse response = queryService.getList(ClothingCategory.ACC, null, 20);
 
 		assertThat(response.content()).isEmpty();
 		assertThat(response.hasNext()).isFalse();
+		assertThat(response.nextCursor()).isNull();
 	}
 
 	@Test

@@ -3,12 +3,13 @@ package com.keepit.clothing.dto;
 import java.util.List;
 
 /**
- * 옷 목록 페이지 (offset 방식, page는 0부터). 전체 개수는 세지 않고 다음 페이지가 있는지만 알려 준다.
+ * 옷 목록 한 묶음 (커서 방식, 무한 스크롤).
+ * 다음 묶음은 nextCursor를 cursor 파라미터로 보내 받는다. 마지막 묶음이면 nextCursor는 null, hasNext는 false.
+ * 전체 개수는 세지 않는다.
  */
 public record ClothingListResponse(
 		List<ClothingCardResponse> content,
-		int page,
-		int size,
+		Long nextCursor,
 		boolean hasNext
 ) {
 }

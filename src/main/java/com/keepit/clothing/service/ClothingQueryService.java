@@ -50,16 +50,24 @@ public class ClothingQueryService {
 	private final FileUploader fileUploader;
 
 	/**
-	 * 대여 가능(AVAILABLE)·미삭제 옷을 최신 등록순으로 준다. 쿼리는 옷+지역 1번, 대표 사진 1번.
+	 * 대여 가능(AVAILABLE)·미삭제 옷을 최신 등록순(id 내림차순)으로 size개씩 준다(커서 방식).
+	 * cursor는 앞 묶음에서 받은 nextCursor이고, 없으면 처음부터. 쿼리는 옷+지역 1번, 대표 사진 1번.
 	 */
-	public ClothingListResponse getList(ClothingCategory category, int page, int size) {
-		Slice<Clothing> slice = clothingRepository.findList(ClothingStatus.AVAILABLE, category,
-				PageRequest.of(page, size));
-		Map<Long, String> thumbnails = thumbnailUrls(slice.getContent());
-		List<ClothingCardResponse> content = slice.getContent().stream()
+	public ClothingListResponse getList(ClothingCategory category, Long cursor, int size) {
+		// cursor보다 작은 id만 size개 가져온다(Slice가 하나 더 읽어 다음 묶음 여부를 판단)
+		Slice<Clothing> slice = clothingRepository.findList(ClothingStatus.AVAILABLE, category, cursor,
+				PageRequest.ofSize(size));
+		List<Clothing> clothes = slice.getContent();
+
+		// 대표 사진은 한 번의 IN 조회로 모아 카드에 붙인다
+		Map<Long, String> thumbnails = thumbnailUrls(clothes);
+		List<ClothingCardResponse> content = clothes.stream()
 				.map(clothing -> toCard(clothing, thumbnails.get(clothing.getId())))
 				.toList();
-		return new ClothingListResponse(content, page, size, slice.hasNext());
+
+		// 다음 묶음이 있으면 이번 묶음의 마지막 id가 다음 커서가 된다
+		Long nextCursor = slice.hasNext() ? clothes.get(clothes.size() - 1).getId() : null;
+		return new ClothingListResponse(content, nextCursor, slice.hasNext());
 	}
 
 	/**
