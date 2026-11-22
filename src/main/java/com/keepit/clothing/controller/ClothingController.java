@@ -8,7 +8,6 @@ import com.keepit.clothing.entity.ClothingCategory;
 import com.keepit.clothing.service.ClothingQueryService;
 import com.keepit.clothing.service.ClothingService;
 import com.keepit.global.response.SuccessResponse;
-import com.keepit.image.support.TemporaryUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,6 +16,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 옷 등록·조회 API (REG-320·330·340, BRW-201, BRW-210 / API 명세 13·14·18번).
- * 로그인(JWT) 구현 전까지는 등록자 id를 TemporaryUser.ID로 고정한다.
+ * 등록자는 액세스 토큰으로 인증된 회원이다(JWT 필터가 principal에 회원 id를 넣는다).
  * 응답의 시각은 모두 KST이고, 이미지는 URL로 준다(S3에서는 presigned 10분 유효).
  */
 @Tag(name = "Clothing", description = "옷 등록·조회")
@@ -46,8 +46,11 @@ public class ClothingController {
 					+ "세탁 방법을 보내지 않으면 DRY_CLEAN.")
 	@PostMapping
 	public ResponseEntity<SuccessResponse<ClothingIdResponse>> register(
+			// 로그인한 회원 id. 인증이 없거나 프로필 미완료면 보안 필터에서 먼저 401·403으로 끝난다
+			@AuthenticationPrincipal Long userId,
 			@Valid @RequestBody ClothingCreateRequest request) {
-		Long clothesId = clothingService.register(TemporaryUser.ID, request);
+		// 등록자를 토큰의 회원으로 저장한다(본인이 올린 이미지만 연결된다)
+		Long clothesId = clothingService.register(userId, request);
 		SuccessResponse<ClothingIdResponse> body = SuccessResponse.created(new ClothingIdResponse(clothesId));
 		return ResponseEntity.status(body.getHttpStatus()).body(body);
 	}
