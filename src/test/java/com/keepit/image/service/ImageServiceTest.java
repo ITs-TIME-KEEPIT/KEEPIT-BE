@@ -55,7 +55,7 @@ class ImageServiceTest {
 
 	@BeforeEach
 	void setUp() {
-		imageService = new ImageService(imageRepository, fileUploader, entityManager, clock);
+		imageService = new ImageService(imageRepository, new ImageFileStorage(fileUploader), entityManager, clock);
 		when(entityManager.getReference(User.class, UPLOADER_ID)).thenReturn(mock(User.class));
 		when(fileUploader.upload(any(), eq("clothes"))).thenReturn("clothes/abc.jpg");
 		when(fileUploader.getUrl("clothes/abc.jpg")).thenReturn("/local-images/clothes/abc.jpg");

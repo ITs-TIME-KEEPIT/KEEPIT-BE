@@ -1,11 +1,15 @@
 package com.keepit.global.security.jwt;
 
+import com.keepit.global.config.ClockConfig;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Date;
+import java.util.UUID;
 import java.util.List;
 import javax.crypto.SecretKey;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +26,8 @@ public class JwtTokenProvider {
 	private static final String TYPE_CLAIM = "type";
 	private static final String ACCESS_TYPE = "access";
 	private static final String REFRESH_TYPE = "refresh";
+	private static final String SIGNUP_TYPE = "signup";
+	private static final Duration SIGNUP_LIFETIME = Duration.ofMinutes(10);
 	private static final int MIN_SECRET_BYTES = 32;
 
 	private final SecretKey secretKey;
@@ -38,11 +44,12 @@ public class JwtTokenProvider {
 		this.refreshTokenExpiration = jwtProperties.refreshTokenExpiration();
 	}
 
-	public String createAccessToken(Long memberId, String role) {
+	public String createAccessToken(Long memberId, String role, long sessionId) {
 		Date now = new Date();
 		return Jwts.builder()
 				.subject(String.valueOf(memberId))
 				.claim(TYPE_CLAIM, ACCESS_TYPE)
+				.claim("sid", sessionId)
 				.claim(ROLE_CLAIM, role)
 				.issuedAt(now)
 				.expiration(new Date(now.getTime() + accessTokenExpiration))
@@ -55,10 +62,50 @@ public class JwtTokenProvider {
 		return Jwts.builder()
 				.subject(String.valueOf(memberId))
 				.claim(TYPE_CLAIM, REFRESH_TYPE)
+				// 같은 초의 재로그인도 이전 리프레시 토큰과 구분한다.
+				.id(UUID.randomUUID().toString())
 				.issuedAt(now)
 				.expiration(new Date(now.getTime() + refreshTokenExpiration))
 				.signWith(secretKey)
 				.compact();
+	}
+
+	// 프로필 등록용 자격은 회원 ID와 용도만 담아 짧게 유지한다.
+	public String createSignupToken(Long memberId, String registration) {
+		Date now = new Date();
+		return Jwts.builder()
+				.subject(String.valueOf(memberId))
+				.claim(TYPE_CLAIM, SIGNUP_TYPE)
+				.claim("registration", registration)
+				.issuedAt(now)
+				.expiration(Date.from(now.toInstant().plus(SIGNUP_LIFETIME)))
+				.signWith(secretKey)
+				.compact();
+	}
+
+	public record SignupIdentity(long memberId, String registration) {}
+
+	// 서명·만료·용도를 단일 파싱으로 검증한다.
+	public java.util.Optional<SignupIdentity> readSignupIdentity(String token) {
+		try {
+			Claims claims = parseClaims(token);
+			if (!SIGNUP_TYPE.equals(claims.get(TYPE_CLAIM, String.class))) {
+				return java.util.Optional.empty();
+			}
+			return java.util.Optional.of(new SignupIdentity(Long.parseLong(claims.getSubject()),
+					claims.get("registration", String.class)));
+		} catch (JwtException | IllegalArgumentException exception) {
+			return java.util.Optional.empty();
+		}
+	}
+
+	public boolean isSignupToken(String token) {
+		return SIGNUP_TYPE.equals(parseClaims(token).get(TYPE_CLAIM, String.class));
+	}
+
+	// JWT 자체의 만료 시각을 읽어 DB와 토큰의 유효 기간을 일치시킨다.
+	public LocalDateTime getExpiresAt(String token) {
+		return LocalDateTime.ofInstant(parseClaims(token).getExpiration().toInstant(), ClockConfig.SEOUL);
 	}
 
 	public boolean validateToken(String token) {
@@ -77,6 +124,23 @@ public class JwtTokenProvider {
 
 	public boolean isRefreshToken(String token) {
 		return REFRESH_TYPE.equals(parseClaims(token).get(TYPE_CLAIM, String.class));
+	}
+
+	public record RequestIdentity(long memberId, boolean signup, Long sessionId) {}
+
+	// 보호된 경로에서 쓸 토큰만 서명과 만료까지 한 번에 검증한다.
+	public java.util.Optional<RequestIdentity> readRequestIdentity(String token) {
+		try {
+			Claims claims = parseClaims(token);
+			String type = claims.get(TYPE_CLAIM, String.class);
+			if (!ACCESS_TYPE.equals(type) && !SIGNUP_TYPE.equals(type)) {
+				return java.util.Optional.empty();
+			}
+			return java.util.Optional.of(new RequestIdentity(Long.parseLong(claims.getSubject()), SIGNUP_TYPE.equals(type),
+					claims.get("sid", Long.class)));
+		} catch (JwtException | IllegalArgumentException exception) {
+			return java.util.Optional.empty();
+		}
 	}
 
 	public Authentication getAuthentication(String token) {

@@ -14,7 +14,7 @@ class JwtTokenProviderTest {
 
 	@Test
 	void access_토큰은_access_타입으로_식별된다() {
-		String token = jwtTokenProvider.createAccessToken(1L, "USER");
+		String token = jwtTokenProvider.createAccessToken(1L, "USER", 7L);
 
 		assertThat(jwtTokenProvider.validateToken(token)).isTrue();
 		assertThat(jwtTokenProvider.isAccessToken(token)).isTrue();

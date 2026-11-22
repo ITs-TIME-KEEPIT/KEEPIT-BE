@@ -21,6 +21,10 @@ Spring Boot 4.1.1 / Java 17 / Gradle 8.14.2 wrapper / MySQL 8.4 + JPA + Flyway /
 - Config is bound via `@ConfigurationProperties` records (`JwtProperties`, `KakaoProperties`) picked up by `@ConfigurationPropertiesScan`. Secrets come from env vars (see `.env.example`).
 - AWS (EC2 deploy, RDS, S3) is on hold: all related code is commented out and tagged `[AWS 보류]` (S3 classes, AWS SDK deps, `aws:`/RDS config, `docs/deploy/cd.yml` draft workflow). Don't re-enable it unless asked; search for `[AWS 보류]` to find every spot.
 
+## Code conventions
+
+- Once a feature's implementation is finished, add comments block by block: each logical code block (validation, lookup, branching, external API call, persistence, etc.) gets a short Korean comment above it explaining what it does and why. Do this before committing / opening the PR.
+
 ## Git / collaboration conventions
 
 - Branches: `main` (release only), `develop` (integration). Work branches are cut from the latest `develop` as `feature|fix|refactor|docs/{issue}-{요약}` where `{issue}` is the GitHub issue number; one branch resolves one issue. Never push directly to `main`/`develop` — open a PR into `develop`; `develop` → `main` only at release.
