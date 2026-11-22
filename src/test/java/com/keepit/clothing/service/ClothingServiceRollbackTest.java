@@ -40,7 +40,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>@DataJpaTest는 테스트 전체가 한 트랜잭션이라 서비스 자체의 롤백을 볼 수 없어서 @SpringBootTest를 쓰고
  * 테스트에는 트랜잭션을 걸지 않는다. 같은 설정의 다른 테스트와 DB를 공유하므로 시드 지역에 기대지 않고
  * 직접 만든 지역을 쓰며, 끝나면 이 테스트가 만든 행만 id로 지운다.
- * 사용자 id는 서비스 인자로 넘기므로 TemporaryUser.ID(1)에 의존하지 않는다.
+ * 사용자 id는 서비스 인자로 넘기므로 특정 회원 id에 의존하지 않는다.
  */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)

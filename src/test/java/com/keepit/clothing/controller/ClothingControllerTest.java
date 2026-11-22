@@ -27,17 +27,20 @@ import com.keepit.clothing.exception.ClothingException;
 import com.keepit.clothing.service.ClothingQueryService;
 import com.keepit.clothing.service.ClothingService;
 import com.keepit.global.exception.GlobalExceptionHandler;
-import com.keepit.image.support.TemporaryUser;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -45,6 +48,9 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 class ClothingControllerTest {
 
 	private static final String URL = "/api/v1/clothes";
+
+	/** 토큰에서 꺼낸 회원 id. 고정값 1이 아닌 값으로 토큰 사용자가 쓰이는지 확인한다. */
+	private static final Long LOGIN_USER_ID = 7L;
 
 	private static final String VALID_BODY = """
 			{
@@ -80,10 +86,20 @@ class ClothingControllerTest {
 	void setUp() {
 		LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
 		validator.afterPropertiesSet();
+		// @AuthenticationPrincipal을 풀 수 있게 해석기를 등록한다
 		mockMvc = MockMvcBuilders.standaloneSetup(new ClothingController(clothingService, clothingQueryService))
 				.setControllerAdvice(new GlobalExceptionHandler())
 				.setValidator(validator)
+				.setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
 				.build();
+		// JWT 필터가 하는 일: principal에 회원 id를 넣는다
+		SecurityContextHolder.getContext().setAuthentication(
+				new UsernamePasswordAuthenticationToken(LOGIN_USER_ID, null, List.of()));
+	}
+
+	@AfterEach
+	void tearDown() {
+		SecurityContextHolder.clearContext();
 	}
 
 	private org.springframework.test.web.servlet.ResultActions postBody(String body) throws Exception {
@@ -91,9 +107,9 @@ class ClothingControllerTest {
 	}
 
 	@Test
-	@DisplayName("등록에 성공하면 201과 clothesId를 돌려주고 임시 사용자로 등록한다")
+	@DisplayName("등록에 성공하면 201과 clothesId를 돌려주고 토큰의 회원으로 등록한다")
 	void 등록_성공_201() throws Exception {
-		when(clothingService.register(eq(TemporaryUser.ID), any(ClothingCreateRequest.class))).thenReturn(42L);
+		when(clothingService.register(eq(LOGIN_USER_ID), any(ClothingCreateRequest.class))).thenReturn(42L);
 
 		postBody(VALID_BODY)
 				.andExpect(status().isCreated())
@@ -102,7 +118,7 @@ class ClothingControllerTest {
 				.andExpect(jsonPath("$.httpStatus").value(201))
 				.andExpect(jsonPath("$.data.clothesId").value(42));
 
-		verify(clothingService).register(eq(TemporaryUser.ID), any(ClothingCreateRequest.class));
+		verify(clothingService).register(eq(LOGIN_USER_ID), any(ClothingCreateRequest.class));
 	}
 
 	@Test
