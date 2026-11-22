@@ -56,19 +56,21 @@ public class ClothingController {
 	}
 
 	@Operation(summary = "옷 목록 (BRW-201)",
-			description = "대여 가능한 옷을 최신 등록순으로 준다(대여 중지·삭제 제외). page는 0부터, size는 1~50.")
+			description = "대여 가능한 옷을 최신 등록순으로 size개씩 준다(대여 중지·삭제 제외, 무한 스크롤). "
+					+ "처음에는 cursor 없이 호출하고, 다음 묶음은 응답의 nextCursor를 cursor로 보낸다. size는 1~50.")
 	@GetMapping
 	public SuccessResponse<ClothingListResponse> getList(
 			@Parameter(description = "카테고리 필터 (없으면 전체)")
 			@RequestParam(required = false) ClothingCategory category,
-			@Parameter(description = "페이지 번호 (0부터)")
-			@RequestParam(defaultValue = "0")
-			@Min(value = 0, message = "페이지 번호가 올바르지 않습니다.") int page,
-			@Parameter(description = "페이지 크기 (기본 20, 최대 50)")
+			// 커서는 1 이상의 옷 id만 받는다. 범위 밖·형식 오류는 공통 처리에서 GLOBAL_400_3
+			@Parameter(description = "앞 응답의 nextCursor (마지막으로 받은 clothesId, 없으면 처음부터)")
+			@RequestParam(required = false)
+			@Min(value = 1, message = "커서 값이 올바르지 않습니다.") Long cursor,
+			@Parameter(description = "한 번에 받을 개수 (기본 20, 최대 50)")
 			@RequestParam(defaultValue = "" + ClothingQueryService.DEFAULT_PAGE_SIZE)
 			@Min(value = 1, message = "페이지 크기가 올바르지 않습니다.")
 			@Max(value = ClothingQueryService.MAX_PAGE_SIZE, message = "페이지 크기가 올바르지 않습니다.") int size) {
-		return SuccessResponse.ok(clothingQueryService.getList(category, page, size));
+		return SuccessResponse.ok(clothingQueryService.getList(category, cursor, size));
 	}
 
 	@Operation(summary = "옷 상세 (BRW-210)",

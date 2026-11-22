@@ -1,5 +1,6 @@
 package com.keepit.clothing.controller;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -201,38 +202,39 @@ class ClothingControllerTest {
 	}
 
 	@Test
-	@DisplayName("목록은 기본 page 0, size 20으로 조회하고 200과 페이지 응답을 돌려준다")
+	@DisplayName("목록은 커서 없이 기본 size 20으로 조회하고 200과 nextCursor·hasNext를 돌려준다")
 	void 목록_기본값() throws Exception {
-		when(clothingQueryService.getList(null, 0, 20))
-				.thenReturn(new ClothingListResponse(List.of(), 0, 20, false));
+		when(clothingQueryService.getList(null, null, 20))
+				.thenReturn(new ClothingListResponse(List.of(), null, false));
 
 		mockMvc.perform(get(URL))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.code").value("SUCCESS_200"))
 				.andExpect(jsonPath("$.data.content").isArray())
-				.andExpect(jsonPath("$.data.page").value(0))
-				.andExpect(jsonPath("$.data.size").value(20))
-				.andExpect(jsonPath("$.data.hasNext").value(false));
+				.andExpect(jsonPath("$.data.nextCursor").value(nullValue()))
+				.andExpect(jsonPath("$.data.hasNext").value(false))
+				.andExpect(jsonPath("$.data.page").doesNotHaveJsonPath());
 	}
 
 	@Test
-	@DisplayName("카테고리·page·size를 그대로 서비스에 넘긴다 (size 최대 50)")
+	@DisplayName("카테고리·cursor·size를 그대로 서비스에 넘긴다 (size 최대 50)")
 	void 목록_파라미터_전달() throws Exception {
-		when(clothingQueryService.getList(ClothingCategory.DRESS, 2, 50))
-				.thenReturn(new ClothingListResponse(List.of(), 2, 50, true));
+		when(clothingQueryService.getList(ClothingCategory.DRESS, 37L, 50))
+				.thenReturn(new ClothingListResponse(List.of(), 12L, true));
 
-		mockMvc.perform(get(URL).param("category", "DRESS").param("page", "2").param("size", "50"))
+		mockMvc.perform(get(URL).param("category", "DRESS").param("cursor", "37").param("size", "50"))
 				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.nextCursor").value(12))
 				.andExpect(jsonPath("$.data.hasNext").value(true));
 
-		verify(clothingQueryService).getList(ClothingCategory.DRESS, 2, 50);
+		verify(clothingQueryService).getList(ClothingCategory.DRESS, 37L, 50);
 	}
 
-	@ParameterizedTest(name = "page={0}, size={1}")
-	@CsvSource({"-1, 20", "0, 0", "0, 51"})
-	@DisplayName("page·size가 범위를 벗어나면 서비스까지 가지 않고 GLOBAL_400_3")
-	void 목록_페이지_범위_오류(String page, String size) throws Exception {
-		mockMvc.perform(get(URL).param("page", page).param("size", size))
+	@ParameterizedTest(name = "{0}={1}")
+	@CsvSource({"size, 0", "size, 51", "cursor, 0", "cursor, -1", "cursor, abc"})
+	@DisplayName("size·cursor가 범위를 벗어나거나 숫자가 아니면 서비스까지 가지 않고 GLOBAL_400_3")
+	void 목록_파라미터_범위_오류(String name, String value) throws Exception {
+		mockMvc.perform(get(URL).param(name, value))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("GLOBAL_400_3"));
 
