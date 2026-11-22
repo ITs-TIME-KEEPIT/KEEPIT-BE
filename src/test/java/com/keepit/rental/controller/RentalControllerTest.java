@@ -45,8 +45,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class RentalControllerTest {
 
 	// 로그인한 사용자 id. 테스트마다 loginAs로 누가 요청하는지 정한다.
-	private static final Long OWNER_ID = 1L;
-	private static final Long BORROWER_ID = 2L;
+	private static final Long OWNER_ID = 101L;
+	private static final Long BORROWER_ID = 202L;
 
 	private final RentalService rentalService = mock(RentalService.class);
 	private MockMvc mockMvc;
