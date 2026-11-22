@@ -1,14 +1,11 @@
 package com.keepit.image.support;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
-import javax.imageio.ImageIO;
-import javax.imageio.stream.MemoryCacheImageInputStream;
 import org.springframework.util.StringUtils;
 
 /**
@@ -22,12 +19,6 @@ public enum ImageFormat {
 
 	/** 판별에 필요한 최대 바이트 수. 파일 전체가 아니라 이만큼만 읽는다. */
 	public static final int HEADER_LENGTH = 8;
-
-	// PNG 리더는 픽셀을 읽은 뒤 파일 끝의 IEND 청크가 없어도 성공할 수 있다.
-	private static final byte[] PNG_END = {0, 0, 0, 0, 'I', 'E', 'N', 'D', (byte) 0xAE, 0x42, 0x60, (byte) 0x82};
-	private static final int VALIDATION_RASTER_SIZE = 1024;
-	private static final int MAX_SOURCE_SIDE = 32_768;
-	private static final long MAX_SOURCE_PIXELS = 200_000_000L;
 
 	private final byte[] signature;
 	private final Set<String> extensions;
@@ -59,40 +50,6 @@ public enum ImageFormat {
 			return false;
 		}
 		return extensions.contains(extension.toLowerCase(Locale.ROOT));
-	}
-
-	public boolean canDecode(byte[] content) {
-		if (this == PNG && (content.length < PNG_END.length || !Arrays.equals(
-				content, content.length - PNG_END.length, content.length, PNG_END, 0, PNG_END.length))) {
-			return false;
-		}
-		var reader = ImageIO.getImageReadersByFormatName(name()).next();
-		try (var input = new MemoryCacheImageInputStream(new ByteArrayInputStream(content))) {
-			reader.setInput(input, true, true);
-			// JPEG 리더는 잘린 데이터를 복구해 반환할 수 있으므로 디코딩 경고도 거부한다.
-			boolean[] warned = {false};
-			reader.addIIOReadWarningListener((source, warning) -> warned[0] = true);
-			int width = reader.getWidth(0);
-			int height = reader.getHeight(0);
-			if (!supportsDimensions(width, height)) {
-				return false;
-			}
-			int longestSide = Math.max(width, height);
-			int sample = 1 + (longestSide - 1) / VALIDATION_RASTER_SIZE;
-			var params = reader.getDefaultReadParam();
-			params.setSourceSubsampling(sample, sample, 0, 0);
-			reader.read(0, params);
-			return !warned[0];
-		} catch (IOException invalidImage) {
-			return false;
-		} finally {
-			reader.dispose();
-		}
-	}
-
-	static boolean supportsDimensions(int width, int height) {
-		return width > 0 && width <= MAX_SOURCE_SIDE && height > 0 && height <= MAX_SOURCE_SIDE
-				&& (long) width * height <= MAX_SOURCE_PIXELS;
 	}
 
 	private boolean matchesSignature(byte[] header) {

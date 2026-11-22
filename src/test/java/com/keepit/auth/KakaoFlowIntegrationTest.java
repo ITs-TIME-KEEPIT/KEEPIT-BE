@@ -20,7 +20,6 @@ import com.keepit.global.s3.FileUploader;
 import com.keepit.global.oauth.kakao.KakaoOAuthClient;
 import com.keepit.global.oauth.kakao.dto.KakaoTokenInfo;
 import com.keepit.global.security.jwt.JwtTokenProvider;
-import com.keepit.image.support.TestImages;
 import com.keepit.user.entity.User;
 import com.keepit.user.repository.RefreshTokenRepository;
 import com.keepit.user.repository.UserRepository;
@@ -179,7 +178,7 @@ class KakaoFlowIntegrationTest {
 	@Test
 	void rollbackAlsoDeletesNewPhoto() throws Exception {
 		String signup = members.login("24112").signupToken();
-		var photo = new MockMultipartFile("profileImage", "face.jpg", "image/jpeg", TestImages.encode("JPEG"));
+		var photo = new MockMultipartFile("profileImage", "face.jpg", "image/jpeg", new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49});
 		String oversizedKey = "p".repeat(256);
 		when(uploader.upload(any(), org.mockito.ArgumentMatchers.eq("profiles"))).thenReturn(oversizedKey);
 		// 저장소가 컬럼보다 긴 키를 반환할 때 실제 DB 커밋 실패를 유도한다.

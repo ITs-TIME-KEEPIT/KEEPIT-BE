@@ -34,7 +34,7 @@ public class ImageController {
 	private final ImageService imageService;
 
 	@Operation(summary = "옷 사진 업로드 (COM-003, REG-310)",
-			description = "JPEG·PNG만 받고, 파일명 확장자가 실제 형식과 같아야 한다(jpg·jpeg·png, 대소문자 무시). 가로·세로 각각 32,768픽셀 이하, 총 2억 화소 이하를 허용한다. "
+			description = "JPEG·PNG만 받고, 파일명 확장자가 실제 형식과 같아야 한다(jpg·jpeg·png, 대소문자 무시). "
 					+ "업로드된 이미지는 미연결 상태로 저장되고 옷 등록 때 연결된다. 응답의 시각은 모두 KST.")
 	@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	public ResponseEntity<SuccessResponse<ImageUploadResponse>> upload(
