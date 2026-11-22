@@ -32,17 +32,21 @@ import com.keepit.rental.service.UnavailableReason;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class RentalControllerTest {
 
-	// 로그인 전 임시 고정 id (11/10 회의 결정). RentalController의 상수와 같아야 한다.
-	private static final Long OWNER_ID = 1L;
-	private static final Long BORROWER_ID = 2L;
+	// 로그인한 사용자 id. 테스트마다 loginAs로 누가 요청하는지 정한다.
+	private static final Long OWNER_ID = 101L;
+	private static final Long BORROWER_ID = 202L;
 
 	private final RentalService rentalService = mock(RentalService.class);
 	private MockMvc mockMvc;
@@ -51,11 +55,24 @@ class RentalControllerTest {
 	void setUp() {
 		mockMvc = MockMvcBuilders.standaloneSetup(new RentalController(rentalService))
 				.setControllerAdvice(new GlobalExceptionHandler())
+				// @AuthenticationPrincipal을 풀 수 있게 해석기를 등록한다
+				.setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
 				.build();
+		loginAs(BORROWER_ID);
+	}
+
+	@AfterEach
+	void tearDown() {
+		SecurityContextHolder.clearContext();
+	}
+
+	private void loginAs(Long userId) {
+		SecurityContextHolder.getContext().setAuthentication(
+				new UsernamePasswordAuthenticationToken(userId, null, List.of()));
 	}
 
 	@Test
-	void 대여_신청은_201과_새_대여_id를_돌려주고_고정된_대여자로_신청한다() throws Exception {
+	void 대여_신청은_201과_새_대여_id를_돌려주고_로그인한_대여자로_신청한다() throws Exception {
 		when(rentalService.request(any(), any(), any(), any(), eq(true))).thenReturn(55L);
 
 		mockMvc.perform(post("/api/v1/clothes/10/rentals")
@@ -132,7 +149,8 @@ class RentalControllerTest {
 	}
 
 	@Test
-	void 받은_신청_목록은_고정된_주인과_필터를_넘긴다() throws Exception {
+	void 받은_신청_목록은_로그인한_주인과_필터를_넘긴다() throws Exception {
+		loginAs(OWNER_ID);
 		when(rentalService.getReceivedRequests(OWNER_ID, 10L, RentalStatus.REQUESTED)).thenReturn(List.of());
 
 		mockMvc.perform(get("/api/v1/me/rental-requests").param("clothesId", "10").param("status", "REQUESTED"))
@@ -144,6 +162,7 @@ class RentalControllerTest {
 
 	@Test
 	void 수락하면_무효_처리된_신청_id를_함께_돌려준다() throws Exception {
+		loginAs(OWNER_ID);
 		when(rentalService.accept(OWNER_ID, 1L)).thenReturn(new RentalAcceptResult(1L, List.of(2L, 3L)));
 
 		mockMvc.perform(patch("/api/v1/rentals/1/accept"))
@@ -154,6 +173,7 @@ class RentalControllerTest {
 
 	@Test
 	void 거절은_사유와_직접_입력을_넘긴다() throws Exception {
+		loginAs(OWNER_ID);
 		mockMvc.perform(patch("/api/v1/rentals/1/reject")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
@@ -175,7 +195,7 @@ class RentalControllerTest {
 	}
 
 	@Test
-	void 취소는_고정된_대여자로_요청한다() throws Exception {
+	void 취소는_로그인한_대여자로_요청한다() throws Exception {
 		mockMvc.perform(patch("/api/v1/rentals/1/cancel"))
 				.andExpect(status().isOk());
 
@@ -183,7 +203,8 @@ class RentalControllerTest {
 	}
 
 	@Test
-	void 전달_완료는_고정된_주인으로_요청한다() throws Exception {
+	void 전달_완료는_로그인한_주인으로_요청한다() throws Exception {
+		loginAs(OWNER_ID);
 		mockMvc.perform(patch("/api/v1/rentals/1/handover"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.success").value(true));
@@ -192,7 +213,7 @@ class RentalControllerTest {
 	}
 
 	@Test
-	void 수령과_반납은_고정된_대여자로_요청한다() throws Exception {
+	void 수령과_반납은_로그인한_대여자로_요청한다() throws Exception {
 		mockMvc.perform(patch("/api/v1/rentals/1/receipt")).andExpect(status().isOk());
 		mockMvc.perform(patch("/api/v1/rentals/1/return")).andExpect(status().isOk());
 
@@ -201,7 +222,8 @@ class RentalControllerTest {
 	}
 
 	@Test
-	void 거래_완료는_고정된_주인으로_요청한다() throws Exception {
+	void 거래_완료는_로그인한_주인으로_요청한다() throws Exception {
+		loginAs(OWNER_ID);
 		mockMvc.perform(patch("/api/v1/rentals/1/complete")).andExpect(status().isOk());
 
 		verify(rentalService).complete(OWNER_ID, 1L);
@@ -209,6 +231,7 @@ class RentalControllerTest {
 
 	@Test
 	void 단계를_건너뛰면_서비스의_상태_오류를_그대로_응답한다() throws Exception {
+		loginAs(OWNER_ID);
 		doThrow(new RentalException(RentalErrorCode.INVALID_RENTAL_STATUS))
 				.when(rentalService).complete(OWNER_ID, 1L);
 
@@ -219,9 +242,10 @@ class RentalControllerTest {
 
 	@Test
 	void 거래_상세는_조회자_역할과_다음_할_일을_준다() throws Exception {
+		loginAs(OWNER_ID);
 		when(rentalService.getDetail(OWNER_ID, 1L)).thenReturn(detail());
 
-		mockMvc.perform(get("/api/v1/rentals/1").param("viewerId", "1"))
+		mockMvc.perform(get("/api/v1/rentals/1"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("ACCEPTED"))
 				.andExpect(jsonPath("$.data.nextAction").value("HANDOVER"))
@@ -230,7 +254,7 @@ class RentalControllerTest {
 	}
 
 	@Test
-	void 거래_상세의_조회자는_기본이_대여자다() throws Exception {
+	void 거래_상세는_로그인한_사용자를_조회자로_넘긴다() throws Exception {
 		when(rentalService.getDetail(BORROWER_ID, 1L)).thenReturn(detail());
 
 		mockMvc.perform(get("/api/v1/rentals/1")).andExpect(status().isOk());
