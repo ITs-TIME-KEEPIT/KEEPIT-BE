@@ -159,4 +159,34 @@ class RentalRepositoryTest {
 				.get().extracting(Clothing::getTitle).isEqualTo("원피스");
 	}
 
+	@Test
+	void 빌린_거래는_내가_신청한_것만_최신순이고_옷_지역_주인을_함께_가져온다() {
+		User stranger = em.persist(User.builder().kakaoId("k-stranger").nickname("남").build());
+		Rental older = rental(dress, 20, 21, NOW);
+		Rental newer = rental(othersClothing, 22, 23, NOW.plusHours(1));
+		em.persist(Rental.request(jacket, stranger,
+				new RentalPeriod(LocalDate.of(2026, 11, 25), LocalDate.of(2026, 11, 26)), TradeMethod.DIRECT, NOW));
+		em.flush();
+		em.clear();
+
+		List<Rental> result = rentalRepository.findAllBorrowedBy(borrower.getId());
+
+		assertThat(result).extracting(Rental::getId).containsExactly(newer.getId(), older.getId());
+		assertThat(Hibernate.isInitialized(result.get(0).getClothing().getRegion())).isTrue();
+		assertThat(Hibernate.isInitialized(result.get(0).getOwner())).isTrue();
+	}
+
+	@Test
+	void 빌려준_거래는_내_옷의_거래만_가져오고_대여자를_함께_가져온다() {
+		Rental mine = rental(dress, 20, 21, NOW);
+		rental(othersClothing, 20, 21, NOW);
+		em.flush();
+		em.clear();
+
+		List<Rental> result = rentalRepository.findAllLentBy(owner.getId());
+
+		assertThat(result).extracting(Rental::getId).containsExactly(mine.getId());
+		assertThat(Hibernate.isInitialized(result.get(0).getBorrower())).isTrue();
+	}
+
 }
