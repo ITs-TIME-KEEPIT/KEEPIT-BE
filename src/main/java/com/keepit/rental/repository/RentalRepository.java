@@ -35,4 +35,29 @@ public interface RentalRepository extends JpaRepository<Rental, Long> {
 			@Param("clothingId") Long clothingId,
 			@Param("status") RentalStatus status);
 
+	/**
+	 * 내가 빌린 거래 전체 (MYP-601 "빌린 옷" 탭). 최신 신청순.
+	 * 카드에 쓰는 옷·지역·상대(옷 주인)를 한 번에 가져와 건마다 추가 쿼리가 나가지 않게 한다.
+	 */
+	@Query("""
+			select r from Rental r
+			join fetch r.clothing c
+			join fetch c.region
+			join fetch r.owner
+			where r.borrower.id = :borrowerId
+			order by r.requestedAt desc, r.id desc
+			""")
+	List<Rental> findAllBorrowedBy(@Param("borrowerId") Long borrowerId);
+
+	/** 내가 빌려준 거래 전체 (MYP-601 "빌려준 옷" 탭). 최신 신청순. 상대는 대여자. */
+	@Query("""
+			select r from Rental r
+			join fetch r.clothing c
+			join fetch c.region
+			join fetch r.borrower
+			where r.owner.id = :ownerId
+			order by r.requestedAt desc, r.id desc
+			""")
+	List<Rental> findAllLentBy(@Param("ownerId") Long ownerId);
+
 }
