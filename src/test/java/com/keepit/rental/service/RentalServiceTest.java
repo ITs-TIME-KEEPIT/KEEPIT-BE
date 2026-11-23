@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import com.keepit.clothing.entity.Clothing;
 import com.keepit.clothing.entity.LaundryBy;
 import com.keepit.clothing.entity.LaundryMethod;
+import com.keepit.clothing.entity.PhotoPart;
 import com.keepit.global.config.ClockConfig;
 import com.keepit.rental.dto.RentalAcceptResult;
 import com.keepit.rental.dto.RentalAvailabilityResponse;
@@ -24,10 +25,12 @@ import com.keepit.rental.entity.RejectReason;
 import com.keepit.rental.entity.RentalNextAction;
 import com.keepit.rental.entity.Rental;
 import com.keepit.rental.entity.RentalPeriod;
+import com.keepit.rental.entity.RentalPhotoStage;
 import com.keepit.rental.entity.RentalStatus;
 import com.keepit.rental.entity.RentalStatusLog;
 import com.keepit.rental.entity.TradeMethod;
 import com.keepit.rental.exception.RentalErrorCode;
+import com.keepit.rental.repository.RentalPhotoRepository;
 import com.keepit.rental.repository.RentalRepository;
 import com.keepit.rental.repository.RentalStatusLogRepository;
 import com.keepit.rental.repository.RentalSupportRepository;
@@ -63,6 +66,8 @@ class RentalServiceTest {
 	private RentalStatusLogRepository statusLogRepository;
 	@Mock
 	private RentalSupportRepository supportRepository;
+	@Mock
+	private RentalPhotoRepository rentalPhotoRepository;
 
 	private RentalService rentalService;
 	private User owner;
@@ -73,7 +78,7 @@ class RentalServiceTest {
 	@BeforeEach
 	void setUp() {
 		rentalService = new RentalService(rentalRepository, statusLogRepository, supportRepository,
-				new RentalSchedulePolicy(), CLOCK);
+				rentalPhotoRepository, new RentalSchedulePolicy(), CLOCK);
 		owner = user(1L);
 		borrower = user(2L);
 		otherBorrower = user(3L);
@@ -91,6 +96,9 @@ class RentalServiceTest {
 		when(supportRepository.findUnavailablePeriods(CLOTHING_ID)).thenReturn(List.of());
 		when(rentalRepository.findAllByClothingIdAndStatusIn(eq(CLOTHING_ID), anyCollection())).thenReturn(List.of());
 		when(rentalRepository.findClothingIdById(any())).thenReturn(Optional.of(CLOTHING_ID));
+		// 기본은 모든 단계 사진이 다 올라와 있는 상태. 사진이 없는 경우는 해당 테스트에서 바꾼다
+		when(rentalPhotoRepository.findPartsOfStage(any(), any()))
+				.thenReturn(List.of(PhotoPart.FRONT, PhotoPart.BACK, PhotoPart.LABEL));
 	}
 
 	private static User user(Long id) {
@@ -428,6 +436,43 @@ class RentalServiceTest {
 
 			assertThat(rental.getStatus()).isEqualTo(RentalStatus.COMPLETED);
 			assertThat(rental.getPhoneHiddenAt()).isEqualTo(NOW.plusDays(7));
+		}
+
+		@Test
+		void 전달_직전_사진이_없으면_전달할_수_없다() {
+			givenAccepted(1L);
+			when(rentalPhotoRepository.findPartsOfStage(1L, RentalPhotoStage.HANDOVER)).thenReturn(List.of());
+
+			assertError(() -> rentalService.handOver(1L, 1L), RentalErrorCode.CHECKPOINT_PHOTO_REQUIRED);
+			verify(statusLogRepository, never()).save(any(RentalStatusLog.class));
+		}
+
+		@Test
+		void 필수_부위가_하나라도_빠지면_수령할_수_없다() {
+			Rental rental = givenAccepted(1L);
+			rental.handOver(NOW);
+			when(rentalPhotoRepository.findPartsOfStage(1L, RentalPhotoStage.RECEIVE))
+					.thenReturn(List.of(PhotoPart.FRONT, PhotoPart.BACK, PhotoPart.DETAIL));
+
+			assertError(() -> rentalService.receive(2L, 1L), RentalErrorCode.CHECKPOINT_PHOTO_REQUIRED);
+		}
+
+		@Test
+		void 반납_사진이_없으면_반납할_수_없다() {
+			Rental rental = givenAccepted(1L);
+			rental.handOver(NOW);
+			rental.receive(NOW);
+			when(rentalPhotoRepository.findPartsOfStage(1L, RentalPhotoStage.RETURN)).thenReturn(List.of());
+
+			assertError(() -> rentalService.returnItem(2L, 1L), RentalErrorCode.CHECKPOINT_PHOTO_REQUIRED);
+		}
+
+		@Test
+		void 단계가_틀리면_사진보다_상태_오류가_먼저다() {
+			givenAccepted(1L);
+			when(rentalPhotoRepository.findPartsOfStage(any(), any())).thenReturn(List.of());
+
+			assertError(() -> rentalService.receive(2L, 1L), RentalErrorCode.INVALID_RENTAL_STATUS);
 		}
 
 		@Test
