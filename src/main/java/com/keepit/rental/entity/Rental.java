@@ -253,10 +253,7 @@ public class Rental extends BaseTimeEntity {
 		return changeStatus(RentalStatus.CANCELED, ActorType.BORROWER, borrower, null);
 	}
 
-	/**
-	 * 옷 주인이 옷을 넘겼다고 표시한다 (TRD-510).
-	 * 전달 사진 확인은 체크포인트 사진 기능이 들어올 때 추가한다.
-	 */
+	/** 옷 주인이 옷을 넘겼다고 표시한다 (TRD-510). 전달 사진 확인은 RentalService가 한다. */
 	public RentalStatusLog handOver(LocalDateTime now) {
 		requireStatus(RentalStatus.ACCEPTED);
 		this.handedOverAt = now;

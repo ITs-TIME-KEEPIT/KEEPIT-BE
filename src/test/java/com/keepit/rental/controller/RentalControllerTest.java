@@ -17,16 +17,21 @@ import com.keepit.global.exception.GlobalExceptionHandler;
 import com.keepit.rental.dto.RentalAcceptResult;
 import com.keepit.clothing.entity.LaundryBy;
 import com.keepit.clothing.entity.LaundryMethod;
+import com.keepit.clothing.entity.PhotoPart;
+import com.keepit.rental.dto.CheckpointPhotoUploadRequest;
 import com.keepit.rental.dto.RentalAvailabilityResponse;
+import com.keepit.rental.dto.RentalCheckpointResponse;
 import com.keepit.rental.dto.RentalDetailResponse;
 import com.keepit.rental.entity.RejectReason;
 import com.keepit.rental.entity.ActorType;
 import com.keepit.rental.entity.RentalPeriod;
+import com.keepit.rental.entity.RentalPhotoStage;
 import com.keepit.rental.entity.RentalNextAction;
 import com.keepit.rental.entity.RentalStatus;
 import com.keepit.rental.entity.TradeMethod;
 import com.keepit.rental.exception.RentalErrorCode;
 import com.keepit.rental.exception.RentalException;
+import com.keepit.rental.service.RentalCheckpointService;
 import com.keepit.rental.service.RentalService;
 import com.keepit.rental.service.UnavailableReason;
 import java.time.LocalDate;
@@ -49,11 +54,12 @@ class RentalControllerTest {
 	private static final Long BORROWER_ID = 202L;
 
 	private final RentalService rentalService = mock(RentalService.class);
+	private final RentalCheckpointService checkpointService = mock(RentalCheckpointService.class);
 	private MockMvc mockMvc;
 
 	@BeforeEach
 	void setUp() {
-		mockMvc = MockMvcBuilders.standaloneSetup(new RentalController(rentalService))
+		mockMvc = MockMvcBuilders.standaloneSetup(new RentalController(rentalService, checkpointService))
 				.setControllerAdvice(new GlobalExceptionHandler())
 				// @AuthenticationPrincipal을 풀 수 있게 해석기를 등록한다
 				.setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
@@ -260,6 +266,62 @@ class RentalControllerTest {
 		mockMvc.perform(get("/api/v1/rentals/1")).andExpect(status().isOk());
 
 		verify(rentalService).getDetail(BORROWER_ID, 1L);
+	}
+
+	@Test
+	void 체크포인트_사진은_로그인한_사용자와_단계_사진_목록을_넘긴다() throws Exception {
+		loginAs(OWNER_ID);
+
+		mockMvc.perform(post("/api/v1/rentals/1/checkpoints/HANDOVER/photos")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"photos":[{"imageId":55,"photoPart":"FRONT"},{"imageId":56,"photoPart":"BACK"},
+								{"imageId":57,"photoPart":"LABEL"}]}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true));
+
+		verify(checkpointService).uploadPhotos(OWNER_ID, 1L, RentalPhotoStage.HANDOVER, List.of(
+				new CheckpointPhotoUploadRequest.Photo(55L, PhotoPart.FRONT),
+				new CheckpointPhotoUploadRequest.Photo(56L, PhotoPart.BACK),
+				new CheckpointPhotoUploadRequest.Photo(57L, PhotoPart.LABEL)));
+	}
+
+	@Test
+	void 체크포인트_사진이_비어_있으면_서비스까지_가지_않고_400() throws Exception {
+		mockMvc.perform(post("/api/v1/rentals/1/checkpoints/RECEIVE/photos")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"photos\":[]}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value("사진을 올려 주세요."));
+
+		verifyNoInteractions(checkpointService);
+	}
+
+	@Test
+	void 없는_단계_이름이면_400() throws Exception {
+		mockMvc.perform(post("/api/v1/rentals/1/checkpoints/UNKNOWN/photos")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"photos\":[{\"imageId\":55,\"photoPart\":\"FRONT\"}]}"))
+				.andExpect(status().isBadRequest());
+
+		verifyNoInteractions(checkpointService);
+	}
+
+	@Test
+	void 사진_비교는_로그인한_사용자로_4단계를_돌려준다() throws Exception {
+		when(checkpointService.getCheckpoints(BORROWER_ID, 1L)).thenReturn(new RentalCheckpointResponse(1L, List.of(
+				new RentalCheckpointResponse.Stage(RentalCheckpointResponse.Step.REGISTER, ActorType.OWNER,
+						LocalDateTime.of(2026, 11, 1, 10, 12), List.of(new RentalCheckpointResponse.Photo(
+								PhotoPart.FRONT, "https://img/front.jpg", LocalDateTime.of(2026, 11, 1, 10, 12)))),
+				new RentalCheckpointResponse.Stage(RentalCheckpointResponse.Step.HANDOVER, ActorType.OWNER, null,
+						List.of()))));
+
+		mockMvc.perform(get("/api/v1/rentals/1/checkpoints"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.stages[0].step").value("REGISTER"))
+				.andExpect(jsonPath("$.data.stages[0].photos[0].imageUrl").value("https://img/front.jpg"))
+				.andExpect(jsonPath("$.data.stages[1].photos").isEmpty());
 	}
 
 	private static RentalDetailResponse detail() {

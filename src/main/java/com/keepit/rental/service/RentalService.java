@@ -12,11 +12,13 @@ import com.keepit.rental.entity.ActorType;
 import com.keepit.rental.entity.RejectReason;
 import com.keepit.rental.entity.Rental;
 import com.keepit.rental.entity.RentalPeriod;
+import com.keepit.rental.entity.RentalPhotoStage;
 import com.keepit.rental.entity.RentalStatus;
 import com.keepit.rental.entity.RentalStatusLog;
 import com.keepit.rental.entity.TradeMethod;
 import com.keepit.rental.exception.RentalErrorCode;
 import com.keepit.rental.exception.RentalException;
+import com.keepit.rental.repository.RentalPhotoRepository;
 import com.keepit.rental.repository.RentalRepository;
 import com.keepit.rental.repository.RentalStatusLogRepository;
 import com.keepit.rental.repository.RentalSupportRepository;
@@ -33,7 +35,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 대여 신청부터 수락·거절·취소까지 (RENT-410~450).
+ * 대여 신청부터 수락·거절·취소, 전달·수령·반납·완료까지 (RENT-410~450, TRD-510~540).
  * 규칙 판단은 {@link Rental}(상태)과 {@link RentalSchedulePolicy}(날짜)에 맡기고,
  * 여기서는 필요한 데이터를 모으고, 권한을 확인하고, 결과와 이력을 저장한다.
  */
@@ -49,6 +51,7 @@ public class RentalService {
 	private final RentalRepository rentalRepository;
 	private final RentalStatusLogRepository statusLogRepository;
 	private final RentalSupportRepository supportRepository;
+	private final RentalPhotoRepository rentalPhotoRepository;
 	private final RentalSchedulePolicy schedulePolicy;
 	private final Clock clock;
 
@@ -170,34 +173,43 @@ public class RentalService {
 		statusLogRepository.save(rental.cancelByBorrower());
 	}
 
-	/** 옷 주인이 옷을 넘겼다고 표시한다 (TRD-510). */
+	/** 옷 주인이 옷을 넘겼다고 표시한다 (TRD-510). 전달 직전 사진(전면·후면·라벨)이 있어야 한다. */
 	@Transactional(isolation = Isolation.READ_COMMITTED)
 	public void handOver(Long ownerId, Long rentalId) {
 		Rental rental = lockClothingAndGetRental(rentalId);
 		if (!rental.isOwnedBy(ownerId)) {
 			throw new RentalException(RentalErrorCode.RENTAL_ACCESS_DENIED);
 		}
-		statusLogRepository.save(rental.handOver(LocalDateTime.now(clock)));
+		RentalStatusLog log = rental.handOver(LocalDateTime.now(clock));
+		requireCheckpointPhotos(rentalId, RentalPhotoStage.HANDOVER);
+		statusLogRepository.save(log);
 	}
 
-	/** 대여자가 옷을 받았다고 확인한다 (TRD-520). */
+	/** 대여자가 옷을 받았다고 확인한다 (TRD-520). 수령 사진(전면·후면·라벨)이 있어야 한다. */
 	@Transactional(isolation = Isolation.READ_COMMITTED)
 	public void receive(Long borrowerId, Long rentalId) {
 		Rental rental = lockClothingAndGetRental(rentalId);
 		if (!rental.isBorrowedBy(borrowerId)) {
 			throw new RentalException(RentalErrorCode.RENTAL_ACCESS_DENIED);
 		}
-		statusLogRepository.save(rental.receive(LocalDateTime.now(clock)));
+		RentalStatusLog log = rental.receive(LocalDateTime.now(clock));
+		requireCheckpointPhotos(rentalId, RentalPhotoStage.RECEIVE);
+		statusLogRepository.save(log);
 	}
 
-	/** 대여자가 옷을 돌려준다 (TRD-530). */
+	/**
+	 * 대여자가 옷을 돌려준다 (TRD-530). 반납 사진(전면·후면·라벨)이 있어야 한다.
+	 * 대여자가 세탁하는 거래도 반납 사진 한 번이 곧 세탁 후 사진이다(Figma 기준).
+	 */
 	@Transactional(isolation = Isolation.READ_COMMITTED)
 	public void returnItem(Long borrowerId, Long rentalId) {
 		Rental rental = lockClothingAndGetRental(rentalId);
 		if (!rental.isBorrowedBy(borrowerId)) {
 			throw new RentalException(RentalErrorCode.RENTAL_ACCESS_DENIED);
 		}
-		statusLogRepository.save(rental.returnItem(LocalDateTime.now(clock)));
+		RentalStatusLog log = rental.returnItem(LocalDateTime.now(clock));
+		requireCheckpointPhotos(rentalId, RentalPhotoStage.RETURN);
+		statusLogRepository.save(log);
 	}
 
 	/** 옷 주인이 반납을 확인하고 거래를 끝낸다 (TRD-540). */
@@ -220,6 +232,16 @@ public class RentalService {
 			return RentalDetailResponse.of(rental, ActorType.BORROWER);
 		}
 		throw new RentalException(RentalErrorCode.RENTAL_ACCESS_DENIED);
+	}
+
+	/**
+	 * 이 단계 사진이 다 올라와 있는지 본다. 상태를 먼저 바꾼 뒤 부르므로, 단계가 틀리면 상태 오류가 먼저 난다.
+	 * 여기서 예외가 나면 트랜잭션이 롤백되어 바뀐 상태도 저장되지 않는다.
+	 */
+	private void requireCheckpointPhotos(Long rentalId, RentalPhotoStage stage) {
+		if (!CheckpointPhotoPolicy.isComplete(rentalPhotoRepository.findPartsOfStage(rentalId, stage))) {
+			throw new RentalException(RentalErrorCode.CHECKPOINT_PHOTO_REQUIRED);
+		}
 	}
 
 	/** 신청 객체를 만들고 날짜 규칙까지 검증한다. 신청과 비용 확인이 같이 쓴다. */
