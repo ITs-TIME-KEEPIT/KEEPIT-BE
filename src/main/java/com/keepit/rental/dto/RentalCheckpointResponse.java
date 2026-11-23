@@ -21,6 +21,7 @@ public record RentalCheckpointResponse(
 		REGISTER, HANDOVER, RECEIVE, RETURN
 	}
 
+	@Schema(name = "CheckpointStage", description = "비교 화면의 한 단계")
 	public record Stage(
 			@Schema(description = "단계. REGISTER=등록 시, HANDOVER=전달 직전, RECEIVE=수령, RETURN=반납", example = "HANDOVER")
 			Step step,
@@ -34,6 +35,8 @@ public record RentalCheckpointResponse(
 	) {
 	}
 
+	/** Swagger 스키마 이름이 옷 상세의 Photo와 겹치지 않게 따로 이름을 준다. */
+	@Schema(name = "CheckpointPhoto", description = "체크포인트 사진 한 장")
 	public record Photo(
 			@Schema(description = "촬영 부위. FRONT=전면, BACK=후면, LABEL=라벨, DETAIL=디테일, DEFECT=흠집(등록 사진만)",
 					example = "FRONT")

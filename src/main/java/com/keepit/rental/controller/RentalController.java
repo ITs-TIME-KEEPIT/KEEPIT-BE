@@ -21,6 +21,7 @@ import com.keepit.rental.service.RentalCheckpointService;
 import com.keepit.rental.service.RentalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
@@ -182,7 +183,9 @@ public class RentalController {
 	public SuccessResponse<Void> uploadCheckpointPhotos(
 			@AuthenticationPrincipal Long userId,
 			@PathVariable Long rentalId,
-			@Parameter(description = "단계. HANDOVER · RECEIVE · RETURN", example = "HANDOVER")
+			// RETURN_WASHED는 DB에만 있는 값이라 문서에서 뺀다(반납은 RETURN 한 번, 대여자 세탁이면 그 사진이 세탁 후 사진)
+			@Parameter(description = "단계. HANDOVER=전달 직전, RECEIVE=수령, RETURN=반납", example = "HANDOVER",
+					schema = @Schema(allowableValues = {"HANDOVER", "RECEIVE", "RETURN"}))
 			@PathVariable RentalPhotoStage stage,
 			@Valid @RequestBody CheckpointPhotoUploadRequest request) {
 		checkpointService.uploadPhotos(userId, rentalId, stage, request.photos());
