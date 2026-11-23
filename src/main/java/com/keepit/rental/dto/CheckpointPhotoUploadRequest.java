@@ -21,6 +21,8 @@ public record CheckpointPhotoUploadRequest(
 		List<@Valid @NotNull(message = "사진 정보가 비어 있습니다.") Photo> photos
 ) {
 
+	/** Swagger 스키마 이름이 옷 상세의 Photo와 겹치지 않게 따로 이름을 준다. */
+	@Schema(name = "CheckpointPhotoUploadItem", description = "체크포인트 사진 등록 항목")
 	public record Photo(
 			@Schema(description = "이미지 업로드 API로 받은 이미지 id", example = "55",
 					requiredMode = Schema.RequiredMode.REQUIRED)

@@ -19,6 +19,8 @@ import com.keepit.clothing.entity.LaundryBy;
 import com.keepit.clothing.entity.LaundryMethod;
 import com.keepit.clothing.entity.PhotoPart;
 import com.keepit.rental.dto.CheckpointPhotoUploadRequest;
+import com.keepit.rental.dto.MyRentalResponse;
+import com.keepit.rental.dto.MyRentalRole;
 import com.keepit.rental.dto.RentalAvailabilityResponse;
 import com.keepit.rental.dto.RentalCheckpointResponse;
 import com.keepit.rental.dto.RentalDetailResponse;
@@ -31,6 +33,7 @@ import com.keepit.rental.entity.RentalStatus;
 import com.keepit.rental.entity.TradeMethod;
 import com.keepit.rental.exception.RentalErrorCode;
 import com.keepit.rental.exception.RentalException;
+import com.keepit.rental.service.MyRentalService;
 import com.keepit.rental.service.RentalCheckpointService;
 import com.keepit.rental.service.RentalService;
 import com.keepit.rental.service.UnavailableReason;
@@ -55,11 +58,12 @@ class RentalControllerTest {
 
 	private final RentalService rentalService = mock(RentalService.class);
 	private final RentalCheckpointService checkpointService = mock(RentalCheckpointService.class);
+	private final MyRentalService myRentalService = mock(MyRentalService.class);
 	private MockMvc mockMvc;
 
 	@BeforeEach
 	void setUp() {
-		mockMvc = MockMvcBuilders.standaloneSetup(new RentalController(rentalService, checkpointService))
+		mockMvc = MockMvcBuilders.standaloneSetup(new RentalController(rentalService, checkpointService, myRentalService))
 				.setControllerAdvice(new GlobalExceptionHandler())
 				// @AuthenticationPrincipal을 풀 수 있게 해석기를 등록한다
 				.setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
@@ -322,6 +326,32 @@ class RentalControllerTest {
 				.andExpect(jsonPath("$.data.stages[0].step").value("REGISTER"))
 				.andExpect(jsonPath("$.data.stages[0].photos[0].imageUrl").value("https://img/front.jpg"))
 				.andExpect(jsonPath("$.data.stages[1].photos").isEmpty());
+	}
+
+	@Test
+	void 내_거래_내역은_기본이_빌린_옷이다() throws Exception {
+		when(myRentalService.getMyRentals(BORROWER_ID, MyRentalRole.BORROWER)).thenReturn(List.of(
+				new MyRentalResponse(55L, RentalStatus.ACCEPTED, 10L, "하객룩 원피스", "https://img/front.jpg", "마포구",
+						LocalDate.of(2026, 11, 20), LocalDate.of(2026, 11, 22), TradeMethod.DIRECT, OWNER_ID, "주인",
+						LocalDateTime.of(2026, 11, 18, 10, 0), LocalDateTime.of(2026, 11, 20, 10, 0))));
+
+		mockMvc.perform(get("/api/v1/me/rentals"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].rentalId").value(55))
+				.andExpect(jsonPath("$.data[0].regionName").value("마포구"))
+				.andExpect(jsonPath("$.data[0].counterpartNickname").value("주인"));
+	}
+
+	@Test
+	void 빌려준_옷_탭은_로그인한_주인으로_조회한다() throws Exception {
+		loginAs(OWNER_ID);
+		when(myRentalService.getMyRentals(OWNER_ID, MyRentalRole.OWNER)).thenReturn(List.of());
+
+		mockMvc.perform(get("/api/v1/me/rentals").param("role", "OWNER"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data").isEmpty());
+
+		verify(myRentalService).getMyRentals(OWNER_ID, MyRentalRole.OWNER);
 	}
 
 	private static RentalDetailResponse detail() {

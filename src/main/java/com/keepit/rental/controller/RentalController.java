@@ -2,6 +2,8 @@ package com.keepit.rental.controller;
 
 import com.keepit.global.response.SuccessResponse;
 import com.keepit.rental.dto.CheckpointPhotoUploadRequest;
+import com.keepit.rental.dto.MyRentalResponse;
+import com.keepit.rental.dto.MyRentalRole;
 import com.keepit.rental.dto.ReceivedRentalRequestResponse;
 import com.keepit.rental.dto.RentalAcceptResult;
 import com.keepit.rental.dto.RentalAvailabilityResponse;
@@ -14,10 +16,12 @@ import com.keepit.rental.dto.RentalQuoteResponse;
 import com.keepit.rental.dto.RentalRejectRequest;
 import com.keepit.rental.entity.RentalPhotoStage;
 import com.keepit.rental.entity.RentalStatus;
+import com.keepit.rental.service.MyRentalService;
 import com.keepit.rental.service.RentalCheckpointService;
 import com.keepit.rental.service.RentalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
@@ -36,11 +40,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 대여 신청·수락·거절·취소, 거래 상태 전이, 체크포인트 사진 API (RENT-410~450, TRD-501~550).
+ * 대여 신청·수락·거절·취소, 거래 상태 전이, 체크포인트 사진, 내 거래 내역 API (RENT-410~450, TRD-501~550, MYP-601).
  *
  * <p>현재 사용자는 JWT에서 꺼낸 {@code @AuthenticationPrincipal Long userId} 로 받는다.
  */
-@Tag(name = "Rental", description = "대여 신청·수락·거절·취소, 전달·수령·반납·완료, 거래 상세, 체크포인트 사진")
+@Tag(name = "Rental", description = "대여 신청·수락·거절·취소, 전달·수령·반납·완료, 거래 상세, 체크포인트 사진, 내 거래 내역")
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
@@ -48,6 +52,7 @@ public class RentalController {
 
 	private final RentalService rentalService;
 	private final RentalCheckpointService checkpointService;
+	private final MyRentalService myRentalService;
 
 	@Operation(summary = "대여 가능 일정 조회 (RENT-410)",
 			description = "조회 구간 안에서 고를 수 없는 날짜와 사유를 직거래·택배별로 준다. 구간을 안 주면 오늘부터 60일, 최대 92일.")
@@ -91,6 +96,17 @@ public class RentalController {
 			@Parameter(description = "특정 옷만 보기") @RequestParam(required = false) Long clothesId,
 			@Parameter(description = "특정 상태만 보기 (예: REQUESTED)") @RequestParam(required = false) RentalStatus status) {
 		return SuccessResponse.ok(rentalService.getReceivedRequests(userId, clothesId, status));
+	}
+
+	@Operation(summary = "내 거래 내역 (MYP-601)",
+			description = "role=BORROWER는 빌린 옷, OWNER는 빌려준 옷. 모든 상태를 최신 신청순으로 준다. "
+					+ "카드를 누르면 거래 상세(GET /rentals/{rentalId})로 들어간다.")
+	@GetMapping("/me/rentals")
+	public SuccessResponse<List<MyRentalResponse>> getMyRentals(
+			@AuthenticationPrincipal Long userId,
+			@Parameter(description = "탭. BORROWER=빌린 옷(기본), OWNER=빌려준 옷", example = "BORROWER")
+			@RequestParam(defaultValue = "BORROWER") MyRentalRole role) {
+		return SuccessResponse.ok(myRentalService.getMyRentals(userId, role));
 	}
 
 	@Operation(summary = "대여 신청 수락 (RENT-430, RENT-440)",
@@ -167,7 +183,9 @@ public class RentalController {
 	public SuccessResponse<Void> uploadCheckpointPhotos(
 			@AuthenticationPrincipal Long userId,
 			@PathVariable Long rentalId,
-			@Parameter(description = "단계. HANDOVER · RECEIVE · RETURN", example = "HANDOVER")
+			// RETURN_WASHED는 DB에만 있는 값이라 문서에서 뺀다(반납은 RETURN 한 번, 대여자 세탁이면 그 사진이 세탁 후 사진)
+			@Parameter(description = "단계. HANDOVER=전달 직전, RECEIVE=수령, RETURN=반납", example = "HANDOVER",
+					schema = @Schema(allowableValues = {"HANDOVER", "RECEIVE", "RETURN"}))
 			@PathVariable RentalPhotoStage stage,
 			@Valid @RequestBody CheckpointPhotoUploadRequest request) {
 		checkpointService.uploadPhotos(userId, rentalId, stage, request.photos());
