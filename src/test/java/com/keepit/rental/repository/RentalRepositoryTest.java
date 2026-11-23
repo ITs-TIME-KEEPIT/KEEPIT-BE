@@ -177,15 +177,19 @@ class RentalRepositoryTest {
 	}
 
 	@Test
-	void 빌려준_거래는_내_옷의_거래만_가져오고_대여자를_함께_가져온다() {
-		Rental mine = rental(dress, 20, 21, NOW);
-		rental(othersClothing, 20, 21, NOW);
+	void 빌려준_거래는_내_옷의_거래만_최신순이고_신청_시각이_같으면_나중_건이_먼저다() {
+		Rental older = rental(dress, 20, 21, NOW);
+		Rental newer = rental(jacket, 22, 23, NOW.plusHours(1));
+		Rental sameTimeLater = rental(dress, 25, 26, NOW.plusHours(1));
+		rental(othersClothing, 20, 21, NOW.plusHours(2));
 		em.flush();
 		em.clear();
 
 		List<Rental> result = rentalRepository.findAllLentBy(owner.getId());
 
-		assertThat(result).extracting(Rental::getId).containsExactly(mine.getId());
+		// requestedAt 내림차순, 같으면 id 내림차순
+		assertThat(result).extracting(Rental::getId)
+				.containsExactly(sameTimeLater.getId(), newer.getId(), older.getId());
 		assertThat(Hibernate.isInitialized(result.get(0).getBorrower())).isTrue();
 	}
 
