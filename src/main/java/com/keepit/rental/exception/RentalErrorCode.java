@@ -21,6 +21,11 @@ public enum RentalErrorCode implements BaseResponseCode {
 	RULES_NOT_AGREED("RENTAL_400_7", HttpStatus.BAD_REQUEST, "이용 규칙에 동의해야 신청할 수 있습니다."),
 	REJECT_REASON_REQUIRED("RENTAL_400_8", HttpStatus.BAD_REQUEST, "거절 사유를 선택해 주세요."),
 	REJECT_REASON_DETAIL_REQUIRED("RENTAL_400_9", HttpStatus.BAD_REQUEST, "기타 사유를 입력해 주세요."),
+	CHECKPOINT_STAGE_NOT_UPLOADABLE("RENTAL_400_10", HttpStatus.BAD_REQUEST, "사진을 올릴 수 없는 단계입니다."),
+	CHECKPOINT_PHOTO_PART_NOT_ALLOWED("RENTAL_400_11", HttpStatus.BAD_REQUEST, "체크포인트 사진은 전면·후면·라벨·디테일만 올릴 수 있습니다."),
+	CHECKPOINT_PHOTO_PART_DUPLICATED("RENTAL_400_12", HttpStatus.BAD_REQUEST, "같은 부위 사진은 한 장만 올릴 수 있습니다."),
+	CHECKPOINT_PHOTO_PART_MISSING("RENTAL_400_13", HttpStatus.BAD_REQUEST, "전면·후면·라벨 사진이 모두 필요합니다."),
+	CHECKPOINT_IMAGE_UNUSABLE("RENTAL_400_14", HttpStatus.BAD_REQUEST, "사용할 수 없는 사진이 포함되어 있습니다."),
 
 	RENTAL_ACCESS_DENIED("RENTAL_403_1", HttpStatus.FORBIDDEN, "이 대여 건에 대한 권한이 없습니다."),
 
@@ -33,7 +38,8 @@ public enum RentalErrorCode implements BaseResponseCode {
 	CLOTHING_NOT_RENTABLE("RENTAL_409_3", HttpStatus.CONFLICT, "지금은 대여할 수 없는 옷입니다."),
 	INVALID_RENTAL_STATUS("RENTAL_409_4", HttpStatus.CONFLICT, "현재 상태에서는 할 수 없는 요청입니다."),
 	RENTAL_REQUEST_EXPIRED("RENTAL_409_5", HttpStatus.CONFLICT, "응답 기한(48시간)이 지난 신청입니다."),
-	RENTAL_START_DATE_PASSED("RENTAL_409_6", HttpStatus.CONFLICT, "대여 시작일이 지난 신청은 수락할 수 없습니다.");
+	RENTAL_START_DATE_PASSED("RENTAL_409_6", HttpStatus.CONFLICT, "대여 시작일이 지난 신청은 수락할 수 없습니다."),
+	CHECKPOINT_PHOTO_REQUIRED("RENTAL_409_7", HttpStatus.CONFLICT, "이 단계의 사진(전면·후면·라벨)을 먼저 올려 주세요.");
 
 	private final String code;
 	private final HttpStatus httpStatus;

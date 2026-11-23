@@ -1,16 +1,20 @@
 package com.keepit.rental.controller;
 
 import com.keepit.global.response.SuccessResponse;
+import com.keepit.rental.dto.CheckpointPhotoUploadRequest;
 import com.keepit.rental.dto.ReceivedRentalRequestResponse;
 import com.keepit.rental.dto.RentalAcceptResult;
 import com.keepit.rental.dto.RentalAvailabilityResponse;
+import com.keepit.rental.dto.RentalCheckpointResponse;
 import com.keepit.rental.dto.RentalCreateRequest;
 import com.keepit.rental.dto.RentalDetailResponse;
 import com.keepit.rental.dto.RentalIdResponse;
 import com.keepit.rental.dto.RentalQuoteRequest;
 import com.keepit.rental.dto.RentalQuoteResponse;
 import com.keepit.rental.dto.RentalRejectRequest;
+import com.keepit.rental.entity.RentalPhotoStage;
 import com.keepit.rental.entity.RentalStatus;
+import com.keepit.rental.service.RentalCheckpointService;
 import com.keepit.rental.service.RentalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -32,17 +36,18 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 대여 신청·수락·거절·취소와 거래 상태 전이 API (RENT-410~450, TRD-501~540).
+ * 대여 신청·수락·거절·취소, 거래 상태 전이, 체크포인트 사진 API (RENT-410~450, TRD-501~550).
  *
  * <p>현재 사용자는 JWT에서 꺼낸 {@code @AuthenticationPrincipal Long userId} 로 받는다.
  */
-@Tag(name = "Rental", description = "대여 신청·수락·거절·취소, 전달·수령·반납·완료, 거래 상세")
+@Tag(name = "Rental", description = "대여 신청·수락·거절·취소, 전달·수령·반납·완료, 거래 상세, 체크포인트 사진")
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
 public class RentalController {
 
 	private final RentalService rentalService;
+	private final RentalCheckpointService checkpointService;
 
 	@Operation(summary = "대여 가능 일정 조회 (RENT-410)",
 			description = "조회 구간 안에서 고를 수 없는 날짜와 사유를 직거래·택배별로 준다. 구간을 안 주면 오늘부터 60일, 최대 92일.")
@@ -116,7 +121,7 @@ public class RentalController {
 		return SuccessResponse.ok(rentalService.getDetail(userId, rentalId));
 	}
 
-	@Operation(summary = "전달 완료 처리 (TRD-510)", description = "옷 주인이 옷을 넘겼다고 표시한다. 수락 상태에서만 가능.")
+	@Operation(summary = "전달 완료 처리 (TRD-510)", description = "옷 주인이 옷을 넘겼다고 표시한다. 수락 상태에서만 가능하고, 전달 직전 사진(HANDOVER)을 먼저 올려야 한다.")
 	@PatchMapping("/rentals/{rentalId}/handover")
 	public SuccessResponse<Void> handOver(
 			@AuthenticationPrincipal Long userId,
@@ -125,7 +130,7 @@ public class RentalController {
 		return SuccessResponse.ok();
 	}
 
-	@Operation(summary = "수령 확인 처리 (TRD-520)", description = "대여자가 옷을 받았다고 확인한다. 전달 상태에서만 가능.")
+	@Operation(summary = "수령 확인 처리 (TRD-520)", description = "대여자가 옷을 받았다고 확인한다. 전달 상태에서만 가능하고, 수령 사진(RECEIVE)을 먼저 올려야 한다.")
 	@PatchMapping("/rentals/{rentalId}/receipt")
 	public SuccessResponse<Void> receive(
 			@AuthenticationPrincipal Long userId,
@@ -134,7 +139,7 @@ public class RentalController {
 		return SuccessResponse.ok();
 	}
 
-	@Operation(summary = "반납 처리 (TRD-530)", description = "대여자가 옷을 돌려준다. 수령 상태에서만 가능.")
+	@Operation(summary = "반납 처리 (TRD-530)", description = "대여자가 옷을 돌려준다. 수령 상태에서만 가능하고, 반납 사진(RETURN)을 먼저 올려야 한다. 대여자가 세탁하는 거래는 세탁한 뒤 찍은 사진이 반납 사진이다.")
 	@PatchMapping("/rentals/{rentalId}/return")
 	public SuccessResponse<Void> returnItem(
 			@AuthenticationPrincipal Long userId,
@@ -151,6 +156,32 @@ public class RentalController {
 			@PathVariable Long rentalId) {
 		rentalService.complete(userId, rentalId);
 		return SuccessResponse.ok();
+	}
+
+	@Operation(summary = "체크포인트 사진 등록 (TRD-510, TRD-520, TRD-530)",
+			description = "사진을 이미지 업로드 API로 먼저 올리고, 받은 id를 부위와 함께 보낸다. "
+					+ "전면·후면·라벨 필수, 디테일 선택, 부위마다 한 장. "
+					+ "HANDOVER=전달 직전(옷 주인, 수락 상태), RECEIVE=수령(대여자, 전달 상태), RETURN=반납(대여자, 수령 상태). "
+					+ "같은 단계에 다시 올리면 기존 사진을 바꾼다. 사진을 올린 뒤 전달·수령·반납 API를 부른다.")
+	@PostMapping("/rentals/{rentalId}/checkpoints/{stage}/photos")
+	public SuccessResponse<Void> uploadCheckpointPhotos(
+			@AuthenticationPrincipal Long userId,
+			@PathVariable Long rentalId,
+			@Parameter(description = "단계. HANDOVER · RECEIVE · RETURN", example = "HANDOVER")
+			@PathVariable RentalPhotoStage stage,
+			@Valid @RequestBody CheckpointPhotoUploadRequest request) {
+		checkpointService.uploadPhotos(userId, rentalId, stage, request.photos());
+		return SuccessResponse.ok();
+	}
+
+	@Operation(summary = "체크포인트 사진 비교 조회 (TRD-550)",
+			description = "등록 시·전달 직전·수령·반납 4단계 사진을 순서대로 준다. 거래 당사자만 볼 수 있다. "
+					+ "등록 시는 옷 등록 사진이고, 아직 안 찍은 단계는 빈 목록이다.")
+	@GetMapping("/rentals/{rentalId}/checkpoints")
+	public SuccessResponse<RentalCheckpointResponse> getCheckpoints(
+			@AuthenticationPrincipal Long userId,
+			@PathVariable Long rentalId) {
+		return SuccessResponse.ok(checkpointService.getCheckpoints(userId, rentalId));
 	}
 
 	@Operation(summary = "대여 신청 취소 (RENT-450)", description = "수락 전, 신청자만 가능. 수락 후 취소는 아직 지원하지 않는다.")
