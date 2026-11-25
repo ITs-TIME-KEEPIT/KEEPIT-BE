@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import java.nio.charset.StandardCharsets;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.HttpClientErrorException;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -62,8 +63,17 @@ class KakaoFlowIntegrationTest {
 	}
 
 	private ResultActions submitToken(String token) throws Exception {
-		return mvc.perform(post("/api/v1/auth/kakao/login").contentType(MediaType.APPLICATION_JSON)
-				.content(json.writeValueAsBytes(java.util.Map.of("accessToken", token))));
+		return mvc.perform(post("/api/v1/auth/kakao/login")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token));
+	}
+
+	@Test
+	void kakaoLoginRejectsMissingOrMalformedAuthorization() throws Exception {
+		mvc.perform(post("/api/v1/auth/kakao/login"))
+				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("AUTH_400_1"));
+		mvc.perform(post("/api/v1/auth/kakao/login")
+				.header(HttpHeaders.AUTHORIZATION, "Basic sdk-token"))
+				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("AUTH_400_1"));
 	}
 
 	@Test
