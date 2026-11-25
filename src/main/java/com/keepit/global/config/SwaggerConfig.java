@@ -12,9 +12,11 @@ import org.springframework.context.annotation.Configuration;
 public class SwaggerConfig {
 
 	private static final String BEARER_AUTH = "bearerAuth";
+	public static final String KAKAO_BEARER_AUTH = "kakaoBearerAuth";
 
 	@Bean
 	public OpenAPI openAPI() {
+		// 기존 KEEPIT JWT를 기본으로 사용하고 카카오 로그인에는 별도 Bearer 입력을 제공한다.
 		return new OpenAPI()
 				.info(new Info()
 						.title("KEEPIT API")
@@ -25,7 +27,11 @@ public class SwaggerConfig {
 						.addSecuritySchemes(BEARER_AUTH, new SecurityScheme()
 								.type(SecurityScheme.Type.HTTP)
 								.scheme("bearer")
-								.bearerFormat("JWT")));
+								.bearerFormat("JWT"))
+						.addSecuritySchemes(KAKAO_BEARER_AUTH, new SecurityScheme()
+								.type(SecurityScheme.Type.HTTP)
+								.scheme("bearer")
+								.description("카카오 모바일 SDK에서 받은 액세스 토큰")));
 	}
 
 }
