@@ -9,6 +9,7 @@ import com.keepit.auth.service.KakaoLoginService;
 import com.keepit.global.config.SwaggerConfig;
 import com.keepit.user.controller.ProfileRegistrationController;
 import com.keepit.user.service.ProfileRegistrationService;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.springdoc.core.configuration.SpringDocConfiguration;
 import org.springdoc.core.properties.SpringDocConfigProperties;
@@ -44,6 +45,11 @@ class AuthApiDocsTest {
 				.andExpect(jsonPath("$.components.securitySchemes.kakaoBearerAuth.type").value("http"))
 				.andExpect(jsonPath("$.components.securitySchemes.kakaoBearerAuth.scheme").value("bearer"))
 				.andExpect(jsonPath("$.security[0].bearerAuth").isArray())
+				// Authorize 창의 두 입력란은 설명으로 넣을 토큰을 구분한다
+				.andExpect(jsonPath("$.components.securitySchemes.bearerAuth.description",
+						Matchers.containsString("백엔드가 발급한 KEEPIT JWT")))
+				.andExpect(jsonPath("$.components.securitySchemes.kakaoBearerAuth.description",
+						Matchers.containsString("POST /api/v1/auth/kakao/login 하나에만")))
 				.andExpect(jsonPath("$.paths['/api/v1/auth/kakao/login'].get").doesNotExist())
 				.andExpect(jsonPath("$.paths['/api/v1/auth/kakao/callback']").doesNotExist())
 				.andExpect(jsonPath("$.paths['/api/v1/auth/kakao/profile']").doesNotExist())
