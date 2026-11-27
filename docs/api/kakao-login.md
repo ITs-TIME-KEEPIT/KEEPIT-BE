@@ -11,7 +11,12 @@ Authorization: Bearer <카카오 SDK 액세스 토큰>
 
 `Authorization: <카카오 SDK 액세스 토큰>`처럼 `Bearer ` 접두사를 생략할 수도 있다. 요청 본문은 비워 둔다. `Authorization` 헤더가 없거나 형식이 잘못되면 HTTP 400과 `AUTH_400_1`을 반환한다. 예전 형식대로 JSON 본문에만 `accessToken`을 보낸 요청도 이 오류를 반환한다.
 
-Swagger UI에서는 **Authorize**의 `kakaoBearerAuth`에 SDK 토큰 값만 입력한다. Swagger UI가 헤더에 `Bearer ` 접두사를 붙인다.
+Swagger UI의 **Authorize**에는 토큰 입력란이 두 개 있다. 두 입력란 모두 토큰 값만 입력하면 Swagger UI가 헤더에 `Bearer ` 접두사를 붙인다.
+
+| 입력란 | 넣을 토큰 | 적용 API |
+|---|---|---|
+| `kakaoBearerAuth` | 카카오가 발급한 accessToken (카카오 SDK 로그인 결과) | `POST /api/v1/auth/kakao/login` 하나 |
+| `bearerAuth` | 백엔드가 발급한 KEEPIT JWT. 로그인 응답의 `accessToken`, 프로필 등록 전에는 `signupToken` | 카카오 로그인을 제외한 모든 API |
 
 백엔드는 카카오 토큰 정보 API로 남은 유효 시간, 회원번호 및 발급 앱 ID를 확인한다. `KAKAO_APP_ID`는 카카오 디벨로퍼스에 표시되는 숫자 앱 ID이며 기본값은 1659627이다. 만료·무효 토큰과 다른 앱의 토큰은 401, 카카오 응답 장애는 502로 처리한다.
 
