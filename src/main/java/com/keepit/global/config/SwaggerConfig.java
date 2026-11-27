@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Configuration;
 public class SwaggerConfig {
 
 	private static final String BEARER_AUTH = "bearerAuth";
+	// [로그인 임시] 카카오 스킴은 등록하지 않지만, 주석처리한 AuthApiDocs 복구 시 참조하므로 상수는 남긴다
 	public static final String KAKAO_BEARER_AUTH = "kakaoBearerAuth";
 
 	@Bean
@@ -36,12 +37,15 @@ public class SwaggerConfig {
 								// [로그인 임시] JWT 대신 고정 사용자 id를 넣는다
 								.description("[로그인 임시] 사용자 id를 넣는다. 1=사용자 1, 2=사용자 2. "
 										+ "Bearer 접두사 없이 숫자만 입력한다."))
-						.addSecuritySchemes(KAKAO_BEARER_AUTH, new SecurityScheme()
-								.type(SecurityScheme.Type.HTTP)
-								.scheme("bearer")
-								.description("카카오가 발급한 accessToken(카카오 모바일 SDK 로그인 결과). "
-										+ "POST /api/v1/auth/kakao/login 하나에만 사용한다. "
-										+ "Bearer 접두사 없이 토큰 값만 입력한다.")));
+						// [로그인 원본] 카카오 로그인 API를 주석처리한 동안 Authorize 창에서 카카오 토큰 입력란을 숨긴다.
+						// 로그인 복구 시 아래 6줄 주석을 풀고, 바로 밑의 [로그인 임시] 닫는 줄을 지운다.
+						// .addSecuritySchemes(KAKAO_BEARER_AUTH, new SecurityScheme()
+						// 		.type(SecurityScheme.Type.HTTP)
+						// 		.scheme("bearer")
+						// 		.description("카카오가 발급한 accessToken(카카오 모바일 SDK 로그인 결과). "
+						// 				+ "POST /api/v1/auth/kakao/login 하나에만 사용한다. "
+						// 				+ "Bearer 접두사 없이 토큰 값만 입력한다.")));
+				); // [로그인 임시] components 닫기
 	}
 
 }
