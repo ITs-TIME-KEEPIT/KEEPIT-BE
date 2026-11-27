@@ -1,3 +1,5 @@
+// [로그인 임시] 카카오 로그인·등록 토큰·JWT 흐름 통합 테스트. 로그인 기능을 임시로 끈 동안 파일 전체를 주석처리했다.
+// 로그인 복구 시 이 두 줄을 지우고 나머지 주석을 푼다.
 // package com.keepit.auth;
 
 // import static org.assertj.core.api.Assertions.assertThat;
@@ -185,6 +187,8 @@
 // 		assertThat(users.findById(user.getId()).orElseThrow().getDeletedAt()).isNull();
 // 	}
 
+// [로그인 임시] 프로필 등록 시 DB 저장이 실패하면 새로 올린 사진도 지우는지 검증하는 테스트.
+// 등록 토큰(signupToken) 흐름에 묶여 있어 카카오 로그인과 함께 의도적으로 주석처리했다. 로그인 복구 시 그대로 주석을 푼다.
 // 	@Test
 // 	void rollbackAlsoDeletesNewPhoto() throws Exception {
 // 		String signup = members.login("24112").signupToken();
